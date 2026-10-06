@@ -1,20 +1,19 @@
 import html
-import importlib
+from urllib.parse import quote_plus, urlparse
 import pandas as pd
 import streamlit as st
-import scraper
+from scraper import JobDiscoveryEngine
 
-importlib.reload(scraper)
-from scraper import JobDiscoveryEngine, LinkedInScraper
 
-# Page configuration
 st.set_page_config(
-    page_title="يا فتّاح يا عليم يا رزّاق يا كريم... أأمر",
+    page_title="وصلة | Wasla - Job Search",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
-# UI theme styling (Dark theme)
+light_mode = st.session_state.get("wasla_light_mode", False)
+
+
 st.markdown(
     """
     <style>
@@ -60,12 +59,12 @@ st.markdown(
     }
 
     /* ─── Page header ───────────────────────────────────────── */
-    .emad-header {
+    .wasla-header {
         text-align: center !important;
         margin-bottom: 2.5rem;
         padding-top: 0.5rem;
     }
-    .emad-logo {
+    .wasla-logo {
         display: inline-flex;
         align-items: center;
         gap: 10px;
@@ -76,22 +75,22 @@ st.markdown(
         text-transform: uppercase;
         margin-bottom: 0.5rem;
     }
-    .emad-logo-dot {
+    .wasla-logo-dot {
         width: 5px;
         height: 5px;
         border-radius: 50%;
         background: #1a7fc1;
         display: inline-block;
     }
-    .emad-title {
+    .wasla-title {
         font-size: 2.4rem;
         font-weight: 800;
         color: #e2e8f0;
         line-height: 1.2;
         margin: 0 0 0.5rem 0;
     }
-    .emad-title span { color: #1a7fc1; }
-    .emad-sub {
+    .wasla-title span { color: #1a7fc1; }
+    .wasla-sub {
         font-size: 0.97rem;
         color: #8b949e;
         line-height: 1.75;
@@ -329,7 +328,7 @@ st.markdown(
     }
 
     /* ─── Welcome & tip boxes ───────────────────────────────── */
-    .emad-welcome {
+    .wasla-welcome {
         background: #161b22;
         border: 1px solid #30363d;
         border-right: 3px solid #1a7fc1;
@@ -341,7 +340,7 @@ st.markdown(
         direction: rtl;
         text-align: right;
     }
-    .emad-tip {
+    .wasla-tip {
         background: #0d2818;
         border: 1px solid #21382a;
         border-right: 3px solid #2ea043;
@@ -477,6 +476,24 @@ st.markdown(
         font-weight: 700;
         box-shadow: 0 0 8px rgba(163, 113, 247, 0.25);
     }
+    .job-badge-source-indeed {
+        background: rgba(33, 142, 241, 0.14);
+        border-color: rgba(33, 142, 241, 0.36);
+        color: #79c0ff;
+        font-weight: 700;
+    }
+    .job-badge-source-post {
+        background: rgba(240, 136, 62, 0.14);
+        border-color: rgba(240, 136, 62, 0.36);
+        color: #ffa657;
+        font-weight: 700;
+    }
+    .job-badge-eligibility {
+        background: rgba(248, 81, 73, 0.14);
+        border-color: rgba(248, 81, 73, 0.36);
+        color: #ff7b72;
+        font-weight: 700;
+    }
     .job-card-action {
         flex-shrink: 0;
     }
@@ -544,14 +561,14 @@ st.markdown(
             padding-top: 1.5rem !important;
             padding-bottom: 2rem !important;
         }
-        .emad-header {
+        .wasla-header {
             margin-bottom: 1.5rem !important;
         }
-        .emad-title {
+        .wasla-title {
             font-size: 1.6rem !important;
             line-height: 1.35 !important;
         }
-        .emad-sub {
+        .wasla-sub {
             font-size: 0.88rem !important;
             line-height: 1.6 !important;
             padding: 0 0.5rem !important;
@@ -674,11 +691,26 @@ st.markdown(
         .active-filters-title {
             font-size: 0.72rem !important;
         }
+        .wasla-footer {
+            flex-direction: column !important;
+            gap: 0.35rem !important;
+            padding: 1.25rem 0.75rem !important;
+            text-align: center !important;
+        }
+        .wasla-footer span,
+        .wasla-footer a {
+            text-align: center !important;
+        }
+        .stCheckbox {
+            min-height: 2.8rem !important;
+            display: flex !important;
+            align-items: center !important;
+        }
     }
 
     /* Extra small mobile adjustments */
     @media (max-width: 420px) {
-        .emad-title {
+        .wasla-title {
             font-size: 1.35rem !important;
         }
         .job-title {
@@ -692,14 +724,53 @@ st.markdown(
         }
     }
 
-    /* ─── Hide Streamlit branding ───────────────────────────── */
+    .wasla-footer {
+        margin: 3.5rem auto 0;
+        padding: 1.25rem 1rem;
+        max-width: 860px;
+        border-top: 1px solid #30363d;
+        color: #8b949e;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+        font-size: 0.82rem;
+        direction: rtl;
+        text-align: center;
+    }
+    .wasla-footer a {
+        color: #58a6ff !important;
+        text-decoration: none !important;
+        font-weight: 700;
+    }
+    .wasla-footer a:hover { text-decoration: underline !important; }
+
     #MainMenu, footer { display: none !important; }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# Location presets and taxonomy options
+theme_css = """
+<style>
+html, body, .stApp { background: #f6f8fb !important; color: #14213d !important; }
+[data-testid="stHeader"] { background: rgba(246,248,251,0.9) !important; }
+.search-card, [data-testid="stMetric"], .job-card { background: #ffffff !important; border-color: #d8e0ea !important; }
+.stTextInput > div > div > input, .stSelectbox > div > div { background: #ffffff !important; border-color: #c9d5e3 !important; color: #14213d !important; }
+.stTextInput label, .stSelectbox label, [data-testid="stMetricValue"], .wasla-title { color: #14213d !important; }
+.wasla-logo, .wasla-sub, [data-testid="stMetricLabel"], .job-badge { color: #526174 !important; }
+.job-company { color: #34445c !important; }
+.job-card:hover { box-shadow: 0 8px 24px rgba(28, 63, 105, 0.12) !important; }
+.stDownloadButton > button { background: #ffffff !important; color: #253858 !important; border-color: #c9d5e3 !important; }
+ul[data-baseweb="menu"] { background: #ffffff !important; border-color: #d8e0ea !important; }
+li[role="option"] { color: #14213d !important; }
+.wasla-footer { border-color: #d8e0ea !important; color: #526174 !important; }
+</style>
+""" if light_mode else ""
+st.markdown(theme_css, unsafe_allow_html=True)
+
+
 COUNTRIES = {
     "مصر": {
         "مصر كلها": "Egypt",
@@ -743,6 +814,28 @@ COUNTRIES = {
         "الشارقة (Sharjah)": "Sharjah, United Arab Emirates",
         "إمارة تانية (كتابة يدوية)": "__custom__",
     },
+    "قطر": {
+        "قطر كلها": "Qatar",
+        "الدوحة (Doha)": "Doha, Qatar",
+        "الريان (Al Rayyan)": "Al Rayyan, Qatar",
+        "مدينة تانية (كتابة يدوية)": "__custom__",
+    },
+    "ألمانيا": {
+        "ألمانيا كلها": "Germany",
+        "برلين (Berlin)": "Berlin, Germany",
+        "ميون (Munich)": "Munich, Germany",
+        "هامبورغ (Hamburg)": "Hamburg, Germany",
+        "فرانكفورت (Frankfurt)": "Frankfurt, Germany",
+        "مدينة تانية (كتابة يدوية)": "__custom__",
+    },
+    "هولندا": {
+        "هولندا كلها": "Netherlands",
+        "أمستردام (Amsterdam)": "Amsterdam, Netherlands",
+        "روتردام (Rotterdam)": "Rotterdam, Netherlands",
+        "لاهاي (The Hague)": "The Hague, Netherlands",
+        "أوترخت (Utrecht)": "Utrecht, Netherlands",
+        "مدينة تانية (كتابة يدوية)": "__custom__",
+    },
     "بلد تانية (كتابة يدوية)": {
         "كتابة يدوية (Custom)": "__custom__",
     },
@@ -777,27 +870,31 @@ DATE_POSTED_OPTIONS = {
     "أي وقت (المتاح كله)": "all",
 }
 
-# Page header
+
 st.markdown(
     """
-    <div class="emad-header">
-        <div class="emad-logo">
-            <span class="emad-logo-dot"></span>
-            عماد
-            <span class="emad-logo-dot"></span>
+    <div class="wasla-header">
+        <div class="wasla-logo">
+            <span class="wasla-logo-dot"></span>
+            وصلة | Wasla
+            <span class="wasla-logo-dot"></span>
         </div>
-        <div class="emad-title">يا فتّاح يا عليم، يا رزّاق يا كريم... <span>أأمر</span></div>
+        <div class="wasla-title">وصلة للفرصة المناسبة <span>ابدأ البحث</span></div>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-# Search Card 1: Role, Seniority, and Job Type
+theme_left, theme_right = st.columns([5, 1])
+with theme_right:
+    st.toggle("☀️ فاتح", key="wasla_light_mode", help="تبديل بين الوضع الفاتح والداكن")
+
+
 keywords_input = st.text_input(
     "عايز تشتغل إيه بالظبط؟ (Job Title)",
     value="Data Analyst",
     placeholder="مثلاً: Python, Data Analyst, Flutter...",
-    help="ممكن تكتب أكتر من مسمى وتفصل بينهم بفاصلة (,) وعماد هيدور عليهم كلهم.",
+    help="ممكن تكتب أكتر من مسمى وتفصل بينهم بفاصلة (,) ووصلة هتدور عليهم كلهم.",
 )
 
 st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
@@ -817,7 +914,7 @@ with col_sen:
         " مستوى الخبرة (Seniority)",
         options=list(SENIORITY_LEVELS.keys()),
         index=0,
-        help="مبتدئ، متوسط، سينيور، أو تدريب.. عماد هيفلترلك المسمى.",
+        help="مبتدئ، متوسط، سينيور، أو تدريب.. وصلة هتفلترلك المسمى.",
     )
     selected_seniority = SENIORITY_LEVELS[seniority_label]
 
@@ -830,8 +927,37 @@ with col_wp:
     )
     selected_workplace = WORKPLACE_TYPES[workplace_label]
 
+st.markdown("<div style='height:0.55rem'></div>", unsafe_allow_html=True)
+filters_top_left, filters_top_right = st.columns(2)
+with filters_top_left:
+    exclude_emirati_only = st.checkbox(
+        "استبعاد وظائف الإماراتيين فقط",
+        value=True,
+        help="يستبعد الإعلانات التي تذكر بوضوح UAE National / Emirati / Emiratisation.",
+    )
+with filters_top_right:
+    internship_no_experience_only = st.checkbox(
+        "Internship: بدون خبرة مطلوبة",
+        value=False,
+        help="يستبعد التدريبات التي تطلب خبرة سابقة، حتى لو كان عنوانها Internship.",
+    )
+filters_bottom_left, filters_bottom_right = st.columns(2)
+with filters_bottom_left:
+    include_indeed = st.checkbox("ابحث في Indeed", value=True)
+with filters_bottom_right:
+    include_recruiter_posts = st.checkbox(
+        "البحث في بوستات التوظيف على LinkedIn",
+        value=True,
+        help="يعرض بوستات توظيف عامة كفرص تواصل؛ قد تحتاج لمراسلة الناشر بدلاً من زر تقديم مباشر.",
+    )
+fast_search = st.checkbox(
+    "بحث سريع (صفحة واحدة لكل مصدر)",
+    value=True,
+    help="ألغِه لبحث أوسع يستغرق وقتاً أطول.",
+)
 
-# Search Card 2: Location and Posting Date
+
+
 col_country, col_city, col_date = st.columns([1, 1.6, 1.2])
 with col_country:
     selected_country = st.selectbox("الدولة", options=list(COUNTRIES.keys()), index=0)
@@ -860,12 +986,26 @@ if target_location_query == "__custom__":
 
 st.markdown("</div>", unsafe_allow_html=True)
 
-# Search Action Button
+
 st.markdown("<div style='height:0.2rem'></div>", unsafe_allow_html=True)
 search_clicked = st.button("شوفلي الشغل ", type="primary", use_container_width=True)
+post_search_terms = " ".join(
+    term for term in [keywords_input.strip(), "hiring", "vacancy", "open position", target_location_query.strip()]
+    if term
+)
+linkedin_content_search_url = (
+    "https://www.linkedin.com/search/results/content/?keywords="
+    + quote_plus(post_search_terms)
+)
+st.link_button(
+    "افتح LinkedIn Posts Search بالبحث ده ↗",
+    linkedin_content_search_url,
+    use_container_width=True,
+    help="يتطلب تسجيل دخولك إلى LinkedIn. سيبحث عن بوستات التوظيف باستخدام المسمى والموقع المختارين.",
+)
 st.markdown("<div style='height:1.5rem'></div>", unsafe_allow_html=True)
 
-# Search execution and results state handling
+
 if "scraped_jobs" not in st.session_state:
     st.session_state["scraped_jobs"] = []
 
@@ -876,16 +1016,21 @@ search_fingerprint = (
     selected_workplace,
     target_location_query.strip().lower(),
     selected_date_posted,
+    exclude_emirati_only,
+    include_indeed,
+    include_recruiter_posts,
+    fast_search,
+    internship_no_experience_only,
 )
 if "last_search_fingerprint" not in st.session_state:
     st.session_state["last_search_fingerprint"] = search_fingerprint
 
-# Reset previous results if search parameters change before running a new search
+
 if st.session_state["last_search_fingerprint"] != search_fingerprint:
     st.session_state["scraped_jobs"] = []
     st.session_state["last_search_fingerprint"] = search_fingerprint
 
-# Sanitize legacy workplace values in active session state
+
 for _old_job in st.session_state["scraped_jobs"]:
     if "غير محدد" in _old_job.get("بيئة العمل", ""):
         _old_job["بيئة العمل"] = "غير محدد"
@@ -897,13 +1042,17 @@ if search_clicked:
     keywords = [k.strip() for k in keywords_input.split(",") if k.strip()]
 
     if not keywords:
-        st.error("يا ريس اكتب لعماد اسم وظيفة واحدة على الأقل يعرف يدور عليها!")
+        st.error("اكتب لوصلة اسم وظيفة واحدة على الأقل عشان تبدأ البحث.")
     elif not target_location_query:
-        st.error("عماد تايه كده.. حدد له المحافظة أو الدولة اللي هيدور فيها!")
+        st.error("حدد الدولة أو المدينة التي تريد البحث فيها.")
     else:
         search_attempted = True
         effective_location = target_location_query.strip()
-        engine = JobDiscoveryEngine()
+        effective_seniority = "internship" if internship_no_experience_only else selected_seniority
+        engine = JobDiscoveryEngine(
+            include_indeed=include_indeed,
+            include_recruiter_posts=include_recruiter_posts,
+        )
         progress_bar = st.progress(0)
         status_box = st.empty()
 
@@ -920,10 +1069,11 @@ if search_clicked:
                     keywords=keywords,
                     location=effective_location,
                     job_type=selected_job_type,
-                    seniority=selected_seniority,
+                    seniority=effective_seniority,
                     workplace_type=selected_workplace,
                     date_posted=selected_date_posted,
-                    pages_per_keyword=2,
+                    pages_per_keyword=1 if fast_search else 2,
+                    exclude_emirati_only=exclude_emirati_only,
                     progress_callback=update_progress,
                 )
             st.session_state["scraped_jobs"] = jobs
@@ -945,7 +1095,7 @@ if search_clicked:
             except Exception:
                 pass
 
-# Render search results
+
 results = st.session_state["scraped_jobs"]
 
 if results:
@@ -973,12 +1123,22 @@ if results:
     top_bar_col1, top_bar_col2 = st.columns([3, 1])
     with top_bar_col1:
         st.success(f"لقينا {total_jobs} فرصة شغل/تدريب تناسب طلبك من مصادر متعددة بدون تكرار.")
+        metrics = st.session_state.get("discovery_metrics", {})
+        location_excluded = metrics.get("location_excluded", 0)
+        emirati_excluded = metrics.get("emirati_excluded", 0)
+        if location_excluded or emirati_excluded:
+            notes = []
+            if location_excluded:
+                notes.append(f"تم استبعاد {location_excluded} نتيجة خارج الموقع المختار")
+            if emirati_excluded:
+                notes.append(f"تم استبعاد {emirati_excluded} وظيفة للإماراتيين فقط")
+            st.caption(" | ".join(notes))
     with top_bar_col2:
         csv_bytes = df.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
         st.download_button(
             label="نزّل اللستة دي شيت Excel",
             data=csv_bytes,
-            file_name="عماد_فرص_عمل_متعددة_المصادر.csv",
+            file_name="wasla_job_results.csv",
             mime="text/csv",
             use_container_width=True,
         )
@@ -990,7 +1150,9 @@ if results:
         loc = html.escape(str(job.get("المكان", "مصر")))
         job_type = html.escape(str(job.get("نوع الوظيفة", "غير محدد")))
         post_date = html.escape(str(job.get("تاريخ النشر", "غير محدد")))
-        link = job.get("رابط التقديم", "#")
+        raw_link = str(job.get("رابط التقديم", ""))
+        parsed_link = urlparse(raw_link)
+        link = raw_link if parsed_link.scheme in {"http", "https"} and parsed_link.netloc else ""
 
         sources = job.get("sources", [])
         if not sources:
@@ -1001,6 +1163,12 @@ if results:
             sources_label = " · ".join(sources)
             source_html = f'<span class="job-badge job-badge-source-multi">✨ {sources_label}</span>'
             btn_text = "قدّم على الرابط المباشر ↗"
+        elif "LinkedIn Recruiter Posts" in sources:
+            source_html = '<span class="job-badge job-badge-source-post">LinkedIn Recruiter Post</span>'
+            btn_text = "افتح بوست التوظيف ↗"
+        elif "Indeed" in sources:
+            source_html = '<span class="job-badge job-badge-source-indeed">Indeed</span>'
+            btn_text = "قدّم على Indeed ↗"
         elif "Tanqeeb" in sources:
             source_html = '<span class="job-badge job-badge-source-tanqeeb">Tanqeeb (تنقيب)</span>'
             btn_text = "قدّم على Tanqeeb ↗"
@@ -1015,7 +1183,7 @@ if results:
         is_grad_type = "خريجين" in job_type or "graduate" in job_type.lower()
         is_grad_seniority = "خريجين" in seniority or "graduate" in seniority.lower()
 
-        # Suppress redundant seniority badge if job_type already conveys the same concept
+
         if (is_intern_type and is_intern_seniority) or (is_grad_type and is_grad_seniority) or (job_type != "غير محدد" and job_type == seniority):
             seniority_html = ""
         elif seniority != "غير محدد":
@@ -1044,6 +1212,11 @@ if results:
             workplace_html = ""
 
         date_html = f'<span class="job-badge job-badge-date">{post_date}</span>' if post_date != "غير محدد" else ""
+        eligibility_note = html.escape(str(job.get("eligibility_note", "")))
+        eligibility_html = (
+            f'<span class="job-badge job-badge-eligibility">⚠ {eligibility_note}</span>'
+            if eligibility_note else ""
+        )
 
         card_html = (
             f'<div class="job-card">'
@@ -1059,10 +1232,11 @@ if results:
             f'{seniority_html}'
             f'{workplace_html}'
             f'{date_html}'
+            f'{eligibility_html}'
             f'</div>'
             f'</div>'
             f'<div class="job-card-action">'
-            f'<a href="{link}" target="_blank" rel="noopener noreferrer" class="job-apply-btn">'
+            f'<a href="{html.escape(link, quote=True)}" target="_blank" rel="noopener noreferrer" class="job-apply-btn">'
             f'{btn_text}'
             f'</a>'
             f'</div>'
@@ -1075,11 +1249,24 @@ if results:
 
 elif search_attempted:
     st.warning(
-        "عماد رجع بإيده فاضية المرة دي! ملقتش حاجة مطابقة بالظبط للمواصفات دي.. "
+        "وصلة لم تجد نتائج مطابقة تمامًا هذه المرة. "
         "جرب تغير المسمى شوية (مثلاً بدل مسمى ضيق، جرب مسمى أوسع زي Software بدل Specialized Junior Tool)، "
-        "أو وسع نطاق المحافظة، وعماد هيفركلك فيها تاني."
+        "أو وسّع نطاق المدينة وجرب البحث مرة أخرى."
     )
 else:
     st.markdown("""
-    
+
     """,unsafe_allow_html=True)
+
+st.markdown(
+    """
+    <div class="wasla-footer">
+        <span>وصلة | Wasla</span>
+        <span>•</span>
+        <a href="https://xmoustafa.github.io" target="_blank" rel="noopener noreferrer">تواصل مع Moustafa</a>
+        <span>•</span>
+        <span>Forked from <a href="https://github.com/qenawy1/EMAD" target="_blank" rel="noopener noreferrer">qenawy1/EMAD</a></span>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)

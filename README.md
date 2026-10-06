@@ -1,9 +1,9 @@
-# 🚀 Emad (عماد) | Multi-Source Job & Internship Discovery Engine
+# 🚀 Wasla (وصلة) | Multi-Source Job & Internship Discovery Engine
 
 <div align="center">
 
-> *"قول إنت بتدور على إيه.. وعماد هيتصرف"*  
-> **Stop juggling tabs across job portals. Emad aggregates, classifies, and deduplicates opportunities across LinkedIn and regional Arab job networks into one clean dashboard.**
+> *"وصلة توصلك للفرصة المناسبة."*
+> **Stop juggling tabs across job portals. Wasla aggregates, classifies, and deduplicates opportunities across LinkedIn and regional Arab job networks into one clean dashboard.**
 
 [![Python Version](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.38%2B-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io)
@@ -15,18 +15,18 @@
 
 ---
 
-## 💡 What is Emad?
+## 💡 What is Wasla?
 
-**Emad** is an intelligent, lightweight **Multi-Source Job Discovery Engine** designed specifically for job seekers, students, and professionals in **Egypt 🇪🇬, Saudi Arabia 🇸🇦, and the UAE 🇦🇪**.
+**Wasla** is an intelligent, lightweight **Multi-Source Job Discovery Engine** designed specifically for job seekers, students, and professionals in **Egypt 🇪🇬, Saudi Arabia 🇸🇦, and the UAE 🇦🇪**.
 
-Instead of manually checking multiple sites every day, getting bombarded with irrelevant leads, or seeing the exact same job reposted five times under slightly different titles, **Emad orchestrates the entire discovery process autonomously**:
-1. **Discovers** listings across independent sources (**LinkedIn** and **Tanqeeb**).
+Instead of manually checking multiple sites every day, getting bombarded with irrelevant leads, or seeing the exact same job reposted five times under slightly different titles, **Wasla orchestrates the entire discovery process autonomously**:
+1. **Discovers** listings across independent sources (**LinkedIn, Indeed, and Tanqeeb**) plus public LinkedIn recruiter-post leads.
 2. **Classifies** seniority, contract types, and work environments using title-first rules.
 3. **Hard-Filters** out irrelevant roles before they ever reach your screen.
 4. **Deduplicates** cross-source duplicates using a conservative multi-signal confidence engine.
 5. **Ranks** results by relevance and presents them with direct apply links and source badges.
 
-> **Zero accounts, zero logins, zero API credentials required.** Emad uses clean, public, and stable guest endpoints.
+> **Zero accounts, zero logins, zero API credentials required.** Wasla uses clean, public, and stable guest endpoints.
 
 ---
 
@@ -36,9 +36,10 @@ Instead of manually checking multiple sites every day, getting bombarded with ir
                1. Discovery & Extraction
       ┌─────────────────────────┴────────────────────────┐
       ▼                                                  ▼
-LinkedIn (Guest Search)                       Tanqeeb (Regional Network)
+LinkedIn + Indeed (Guest Search)               Tanqeeb (Regional Network)
    [Egypt · Saudi · UAE]                          [Egypt · Saudi · UAE]
       │                                                  │
+LinkedIn Recruiter Posts (public indexed leads)
       └─────────────────────────┬────────────────────────┘
                                 ▼
                     2. Data Normalization
@@ -72,13 +73,15 @@ LinkedIn (Guest Search)                       Tanqeeb (Regional Network)
   - **United Arab Emirates 🇦🇪:** Routed to `uae.tanqeeb.com` (Dubai, Abu Dhabi, Sharjah, etc.)
   - **Gulf & MENA:** Supports Kuwait, Qatar, Oman, Bahrain, and Jordan.
 - **Fault-Isolated Execution:** If one source experiences a temporary network hiccup, the other source continues seamlessly without crashing or surfacing stack traces.
+- **Indeed (`IndeedSource`):** Searches Indeed's public regional pages; if Indeed presents an anti-bot challenge, the source fails safely and the other sources continue.
+- **LinkedIn recruiter-post leads:** Finds public LinkedIn post URLs using a public web index. These are clearly labeled as leads because they may require messaging the recruiter rather than submitting through an ATS.
 
 ---
 
 ### 2. 🛡️ Intelligent Multi-Signal Deduplication (`dedup.py`)
 > **Core Principle: "A false merge is far worse than an undetected duplicate."**
 
-Emad avoids naive `company + title` merges that hide real jobs. Instead, it uses a multi-signal confidence engine:
+Wasla avoids naive `company + title` merges that hide real jobs. Instead, it uses a multi-signal confidence engine:
 - **Canonical URL Matching:** Cleans and normalizes URLs by stripping tracking queries (`utm_*`, `ref`, `trk`).
 - **Conservative Company Normalization:** Strips *only* pure legal suffixes (`LLC`, `Ltd`, `Inc`, `Corp`, `ش.م.م`). Crucial corporate identity tokens like `Technologies`, `Solutions`, `Systems`, and `Labs` are strictly preserved (e.g., *Smart Eye* and *Smart Eye Technologies* remain separate).
 - **Location Guardrails:** Same company and title in different cities (e.g., Cairo vs. Alexandria) are strictly kept as **2 separate jobs**.
@@ -100,6 +103,8 @@ Emad avoids naive `company + title` merges that hide real jobs. Instead, it uses
   - `سينيور / خبير (Senior / Lead)` - Senior, Lead, and Architect roles
   - `إدارة وقيادة (Manager / Director)` - Departmental and executive management
 - **Workplace Environments:** Remote (`عن بُعد`), Hybrid (`هجين`), or On-site (`من المقر`).
+- **Emiratisation exclusion:** A default-on checkbox removes postings explicitly marked `UAE National`, `Emirati`, `For Emirate`, or `Emiratisation`; turn it off to review those results with a visible warning badge.
+- **Fast mode and concurrency:** Sources run in parallel. Fast mode checks one page per source; disable it when you prefer wider coverage over speed.
 
 ---
 
@@ -136,7 +141,7 @@ job-scaraping/
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/0xQenawy/job-scrabbing.git
+git clone https://github.com/xmoustafa/wasla.git
 cd job-scaraping
 ```
 
@@ -150,7 +155,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Open your browser at **`http://localhost:8501`**, specify your target role, pick your country/city, and let Emad do the work!
+Open your browser at **`http://localhost:8501`**, specify your target role, pick your country/city, and let Wasla do the work!
 
 ---
 
@@ -166,7 +171,7 @@ Open your browser at **`http://localhost:8501`**, specify your target role, pick
 ---
 
 ## 💡 Tips for Best Results
-- **Looking for Internships?** Enter just the core technology (e.g. `Flutter` or `React`) and select `تدريب طلبة وخريجين (Internship)` from the seniority dropdown. Emad will filter out all senior noise and experienced roles automatically.
+- **Looking for Internships?** Enter just the core technology (e.g. `Flutter` or `React`) and select `تدريب طلبة وخريجين (Internship)` from the seniority dropdown. Wasla will filter out all senior noise and experienced roles automatically.
 - **Multiple Roles:** Search for multiple related titles at once separated by commas (e.g. `Frontend, React, Web`).
 - **Direct Application:** Clicking the apply button opens the original direct application page without passing through unneeded redirects.
 

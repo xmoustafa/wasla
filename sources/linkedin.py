@@ -155,14 +155,15 @@ class LinkedInSource(BaseJobSource):
         """Fetch and extract raw LinkedIn jobs."""
         extracted_jobs: List[UnifiedJob] = []
         seen_job_ids: Set[str] = set()
+        max_pages = max(1, min((limit_per_query + 24) // 25, 2))
 
         for kw in keywords:
             targeted_queries = self._generate_targeted_queries(
                 kw, job_type=job_type, seniority=seniority, workplace_type=workplace_type
             )
-            # Fetch up to 2 pages (50 jobs) per targeted query
+
             for tq in targeted_queries:
-                for page in range(2):
+                for page in range(max_pages):
                     start = page * 25
                     params = {
                         "keywords": tq,
@@ -215,7 +216,7 @@ class LinkedInSource(BaseJobSource):
                                 company = self._normalize_string(company_elem.text if company_elem else "غير محدد")
 
                                 location_elem = card.find("span", class_="job-search-card__location")
-                                loc = self._normalize_string(location_elem.text if location_elem else location)
+                                loc = self._normalize_string(location_elem.text) if location_elem else "Unknown"
 
                                 date_elem = card.find("time")
                                 post_date = "غير محدد"
@@ -238,6 +239,7 @@ class LinkedInSource(BaseJobSource):
                                         sources=["LinkedIn"],
                                         posted_date=post_date,
                                         raw_source_data={"query": tq, "keyword": kw},
+                                        location_verified=bool(location_elem),
                                     )
                                 )
                             except Exception as card_err:

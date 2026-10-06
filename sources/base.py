@@ -21,11 +21,13 @@ class UnifiedJob:
     sources: List[str] = field(default_factory=list)
     posted_date: str = "غير محدد"
     description: str = ""
+    eligibility_note: str = ""
+    location_verified: bool = True
     relevance_score: int = 0
     raw_source_data: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert UnifiedJob to dict matching Emad's UI and export formats."""
+        """Convert UnifiedJob to dict matching Wasla's UI and export formats."""
         source_label = " + ".join(self.sources) if self.sources else "غير محدد"
         return {
             "Job ID": self.job_id,
@@ -41,6 +43,8 @@ class UnifiedJob:
             "sources": list(self.sources),
             "relevance_score": self.relevance_score,
             "description": self.description,
+            "eligibility_note": self.eligibility_note,
+            "location_verified": self.location_verified,
         }
 
 

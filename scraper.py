@@ -3,13 +3,17 @@ import logging
 import random
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from urllib.parse import quote_plus
 import requests
-from bs4 import BeautifulSoup 
+from bs4 import BeautifulSoup
 
-from sources import BaseJobSource, LinkedInSource, TanqeebSource, UnifiedJob
+from sources import (
+    BaseJobSource, IndeedSource, LinkedInRecruiterPostSource, LinkedInSource,
+    TanqeebSource, UnifiedJob,
+)
 from dedup import JobDeduplicator
 
 logger = logging.getLogger(__name__)
@@ -20,16 +24,16 @@ class SearchIntent:
     """Structured search intent representing user preferences."""
     keywords: List[str]
     location: str
-    job_type: str = "all"        # "all", "internship", "full_time", "part_time", "contract"
-    seniority: str = "all"       # "all", "internship", "entry", "mid", "senior", "director"
-    workplace_type: str = "all"  # "all", "remote", "hybrid", "onsite"
-    date_posted: str = "all"     # "all", "past_24h", "past_week", "past_month"
+    job_type: str = "all"
+    seniority: str = "all"
+    workplace_type: str = "all"
+    date_posted: str = "all"
 
 
 class JobClassifier:
     """Classification and analysis engine for job titles, seniority levels, and employment types."""
 
-    # Exclusion patterns for senior/lead roles
+
     SENIOR_LEAD_PATTERNS = [
         r"\bsenior\b",
         r"\bsr\.?\b",
@@ -51,7 +55,7 @@ class JobClassifier:
         r"\bرئيس\b",
     ]
 
-    # Internship and trainee patterns
+
     INTERN_PATTERNS = [
         r"\bintern\b",
         r"\binternship\b",
@@ -65,7 +69,7 @@ class JobClassifier:
         r"\bمتدرب\b",
     ]
 
-    # Graduate program patterns
+
     GRAD_PROGRAM_PATTERNS = [
         r"\bgraduate[\s-]program\b",
         r"\bgraduate[\s-]in[\s-]training\b",
@@ -75,7 +79,7 @@ class JobClassifier:
         r"\bmentorship[\s-]program\b",
     ]
 
-    # Entry-level and junior patterns
+
     ENTRY_PATTERNS = [
         r"\bjunior\b",
         r"\bjr\.?\b",
@@ -90,7 +94,7 @@ class JobClassifier:
         r"\bحديثي[\s-]التخرج\b",
     ]
 
-    # Non-tech domains to exclude when searching for tech roles
+
     NON_TECH_DOMAINS = [
         r"\bmarketing\b",
         r"\bmedia[\s-]buying\b",
@@ -116,14 +120,82 @@ class JobClassifier:
         r"\bnurse\b",
     ]
 
-    # Explicit years of experience patterns
+
     EXPERIENCE_PATTERNS = [
         r"(?<![0-9][\s–\-])\b[1-9]\d*\+?(?:\s*[–\-+to]+\s*[0-9]+)?\s*(?:years?|yrs?|yr|سنوات|سنة)\b",
         r"\b(سنتين|سنة|[1-9]\d*\s*سنوات?)\s*خبرة\b|\bخبرة\s*(سنتين|سنة|[1-9]\d*)\b",
         r"\bexperienced\b",
     ]
 
-    # Contract, freelance, and temporary work patterns
+
+
+
+    EMIRATI_ONLY_PATTERNS = [
+        r"\buae\s*nationals?\s*(only|exclusive|only need apply)?\b",
+        r"\b(emirati|emiratis)\s*(only|exclusive|nationals?)\b",
+        r"\b(emiratisation|emiratization)\b",
+        r"\bfor\s+emirate\b",
+        r"\bfor\s+emiratis?\b",
+        r"\bfor\s+uae\s+nationals?\b",
+        r"للمواطنين\s+الإماراتيين",
+        r"للاماراتيين",
+        r"توطين",
+    ]
+
+    LOCATION_GROUPS = {
+        "uae": ["uae", "united arab emirates", "الإمارات", "الامارات", "dubai", "abu dhabi", "sharjah", "ajman", "fujairah", "ras al khaimah"],
+        "egypt": ["egypt", "مصر", "cairo", "alexandria", "giza"],
+        "saudi": ["saudi arabia", "saudi", "السعودية", "السعوديه", "riyadh", "jeddah", "dammam"],
+        "qatar": ["qatar", "قطر", "doha", "الدوحة", "الدوحه", "al rayyan", "الريان"],
+        "germany": ["germany", "ألمانيا", "المانيا", "berlin", "munich", "hamburg", "frankfurt"],
+        "netherlands": ["netherlands", "holland", "هولندا", "amsterdam", "rotterdam", "the hague", "utrecht"],
+    }
+    CITY_ALIASES = {
+        "dubai": ["dubai", "دبي"],
+        "abu_dhabi": ["abu dhabi", "abu-dhabi", "أبوظبي", "ابوظبي"],
+        "doha": ["doha", "الدوحة", "الدوحه"],
+        "berlin": ["berlin"],
+        "munich": ["munich", "münchen"],
+        "hamburg": ["hamburg"],
+        "frankfurt": ["frankfurt"],
+        "amsterdam": ["amsterdam"],
+        "rotterdam": ["rotterdam"],
+        "the_hague": ["the hague", "den haag"],
+        "utrecht": ["utrecht"],
+        "sharjah": ["sharjah", "الشارقة", "الشارقه"],
+        "cairo": ["cairo", "القاهرة", "القاهره"],
+        "riyadh": ["riyadh", "الرياض"],
+        "jeddah": ["jeddah", "جدة", "جده"],
+    }
+
+    @classmethod
+    def has_emirati_only_requirement(cls, *texts: str) -> bool:
+        """Return true when a listing explicitly targets UAE nationals."""
+        searchable = " ".join(text or "" for text in texts).lower()
+        return any(re.search(pattern, searchable, re.IGNORECASE) for pattern in cls.EMIRATI_ONLY_PATTERNS)
+
+    @classmethod
+    def matches_target_location(cls, job_location: str, target_location: str) -> bool:
+        """Hard-match known country/city choices; never leak results from another country."""
+        job = (job_location or "").lower()
+        target = (target_location or "").lower()
+        if not job or not target:
+            return True
+
+
+        for aliases in cls.CITY_ALIASES.values():
+            if any(alias in target for alias in aliases):
+                return any(alias in job for alias in aliases)
+
+        for aliases in cls.LOCATION_GROUPS.values():
+            if any(alias in target for alias in aliases):
+                return any(alias in job for alias in aliases)
+
+
+
+        return True
+
+
     CONTRACT_PATTERNS = [
         r"\bcontract(?:or|ual)?\b",
         r"\bfreelanc(?:e|er|ing)\b",
@@ -142,7 +214,7 @@ class JobClassifier:
         r"\bاستشاري\b",
     ]
 
-    # Internship modifiers and tokens
+
     INTERN_MODIFIERS = {
         "intern", "internship", "trainee", "training", "co-op",
         "apprentice", "apprenticeship", "student", "تدريب", "متدرب", "طلبة"
@@ -177,13 +249,13 @@ class JobClassifier:
             if not tokens:
                 continue
 
-            # Pure internship modifier token (e.g. 'intern' or 'trainee')
+
             if all(t in cls.INTERN_MODIFIERS for t in tokens):
                 has_intern_signal = True
                 effective_seniority = "internship"
                 continue
 
-            # Compound token containing both role and internship modifier (e.g. 'flutter intern')
+
             if any(t in cls.INTERN_MODIFIERS for t in tokens):
                 has_intern_signal = True
                 effective_seniority = "internship"
@@ -192,7 +264,7 @@ class JobClassifier:
                     cleaned_keywords.append(" ".join(clean_tokens))
                 continue
 
-            # Check for senior / lead modifiers
+
             if any(t in ["senior", "sr", "lead", "architect", "سينيور", "خبير"] for t in tokens):
                 if effective_seniority == "all":
                     effective_seniority = "senior"
@@ -203,7 +275,7 @@ class JobClassifier:
                     cleaned_keywords.append(kw_clean)
                 continue
 
-            # Check for junior / entry-level modifiers
+
             if any(t in ["junior", "jr", "entry", "fresh", "مبتدئ", "حديث"] for t in tokens):
                 if effective_seniority == "all":
                     effective_seniority = "entry"
@@ -214,7 +286,7 @@ class JobClassifier:
                     cleaned_keywords.append(kw_clean)
                 continue
 
-            # Check for contract / freelance modifiers
+
             contract_tokens = ["contract", "freelance", "freelancer", "عقد", "حر", "فريلانس"]
             if any(t in contract_tokens for t in tokens):
                 if effective_job_type == "all":
@@ -250,7 +322,7 @@ class JobClassifier:
             if re.search(pat, title_clean):
                 return "خبير / قيادي (Senior/Lead)"
 
-        # Check explicit experience requirements in title
+
         if cls.is_experience_required(title):
             if re.search(
                 r"(?<![0-9][\s–\-])\b[3-9]\d*\+?(?:\s*[–\-+to]+\s*[0-9]+)?\s*(?:years?|yrs?|yr|سنوات)\b",
@@ -287,7 +359,7 @@ class JobClassifier:
             if re.search(pat, title_clean):
                 return "عقد / عمل حر (Contract)"
 
-        # Explicit experience requirement disqualifies internship
+
         if cls.is_experience_required(title):
             if re.search(r"\b(part[\s-]time|دوام[\s-]جزئي)\b", title_clean):
                 return "دوام جزئي (Part-time)"
@@ -332,7 +404,7 @@ class JobClassifier:
         kw_clean = requested_keyword.lower()
         title_clean = job_title.lower()
 
-        # Detect if requested keyword targets a tech role
+
         is_tech_search = any(
             t in kw_clean
             for t in [
@@ -345,26 +417,26 @@ class JobClassifier:
 
         if is_tech_search:
             for pat in cls.NON_TECH_DOMAINS:
-                # Exclude if non-tech signal is present unless user explicitly searched for it
+
                 if re.search(pat, title_clean) and not re.search(pat, kw_clean):
                     return True
 
         return False
 
-    # Stopwords ignored during keyword tokenization
+
     STOPWORDS = {
         "in", "for", "and", "the", "of", "or", "a", "to", "with", "at",
         "من", "في", "على", "و", "عن", "مع", "إلى", "الى"
     }
 
-    # Generic role modifiers insufficient on their own for domain matching
+
     CORE_MODIFIERS = {
         "developer", "engineer", "specialist", "officer", "job", "role",
         "intern", "internship", "trainee", "training", "junior", "senior",
         "lead", "manager", "head", "مهندس", "مطور", "تدريب", "مبتدئ", "سينيور",
     }
 
-    # Synonym map for technical domains and specializations
+
     ROLE_SYNONYMS = {
         "software": ["software", "swe", "developer", "engineer", "programmer", "coding", "مبرمج", "تطوير", "برمجيات"],
         "developer": ["developer", "software", "engineer", "programmer", "swe", "مبرمج"],
@@ -390,15 +462,15 @@ class JobClassifier:
         kw_clean = requested_keyword.strip().lower()
         title_clean = job_title.lower()
 
-        # 1. Direct exact match
+
         if kw_clean in title_clean:
             return True
 
-        # Accept generic queries without domain constraints (contract, internship, job)
+
         if kw_clean in ["contract", "freelance", "freelancer", "عقد", "عمل حر", "intern", "internship", "تدريب", "وظيفة", "شغل", "job"]:
             return True
 
-        # Tokenize and filter stopwords
+
         tokens = [
             tok for tok in re.split(r"[\s,\-_/]+", kw_clean)
             if len(tok) >= 2 and tok not in cls.STOPWORDS
@@ -406,7 +478,7 @@ class JobClassifier:
         if not tokens:
             return False
 
-        # Isolate core domain tokens
+
         core_tokens = [tok for tok in tokens if tok not in cls.CORE_MODIFIERS]
         tokens_to_match = core_tokens if core_tokens else tokens
 
@@ -429,21 +501,23 @@ class JobClassifier:
         requested_keyword: str,
         requested_job_type: str = "all",
         requested_seniority: str = "all",
+        description: str = "",
     ) -> bool:
         """
         Hard filtering gate to immediately exclude jobs violating role, seniority, or employment criteria.
         """
         title_clean = title.lower()
+        requirement_text = f"{title} {description}".lower()
 
-        # 1. Exclude titles unrelated to requested role
+
         if not cls.matches_requested_role(requested_keyword, title):
             return False
 
-        # Exclude conflicting domains
+
         if cls.is_conflicting_domain(requested_keyword, title):
             return False
 
-        # Check if query targets internship
+
         is_intern_request = (
             requested_job_type == "internship"
             or requested_seniority == "internship"
@@ -453,76 +527,76 @@ class JobClassifier:
             )
         )
 
-        # 2. Internship hard filter
+
         if is_intern_request:
-            # Reject jobs explicitly requiring 1+ years of experience
-            if cls.is_experience_required(title):
+
+            if cls.is_experience_required(requirement_text):
                 return False
 
-            # Reject senior/lead/manager roles
+
             for pat in cls.SENIOR_LEAD_PATTERNS:
                 if re.search(pat, title_clean):
                     return False
 
-            # Ensure explicit intern/grad signal exists in title
+
             is_intern_signal = any(re.search(pat, title_clean) for pat in cls.INTERN_PATTERNS)
             is_grad_signal = any(re.search(pat, title_clean) for pat in cls.GRAD_PROGRAM_PATTERNS)
 
             if not (is_intern_signal or is_grad_signal):
                 return False
 
-        # 3. Entry-level / Junior hard filter
+
         elif requested_seniority == "entry":
-            # Reject senior/lead/manager roles
+
             for pat in cls.SENIOR_LEAD_PATTERNS:
                 if re.search(pat, title_clean):
                     return False
 
-            # Reject 3+ years required experience
+
             if re.search(
                 r"(?<![0-9][\s–\-])\b[3-9]\d*\+?(?:\s*[–\-+to]+\s*[0-9]+)?\s*(?:years?|yrs?|yr|سنوات)\b",
-                title_clean,
+                requirement_text,
             ):
                 return False
-            if re.search(r"\b(خبرة\s*[3-9]|[3-9]\s*سنوات\s*خبرة)\b", title_clean):
+            if re.search(r"\b(خبرة\s*[3-9]|[3-9]\s*سنوات\s*خبرة)\b", requirement_text):
                 return False
 
-            # Exclude pure student internships when searching for entry-level roles
+
             if any(re.search(p, title_clean) for p in cls.INTERN_PATTERNS) and not any(re.search(p, title_clean) for p in cls.ENTRY_PATTERNS) and requested_job_type != "internship":
                 return False
 
-        # 4. Senior / Lead hard filter
+
         elif requested_seniority == "senior":
-            # Reject entry-level and internship titles
+
             if any(re.search(pat, title_clean) for pat in cls.INTERN_PATTERNS):
                 return False
             if any(re.search(pat, title_clean) for pat in cls.ENTRY_PATTERNS):
                 return False
 
-            # Require explicit senior/lead signal or 3+ years experience
+
             has_senior_signal = any(re.search(pat, title_clean) for pat in cls.SENIOR_LEAD_PATTERNS)
             has_high_exp = bool(
                 re.search(
                     r"(?<![0-9][\s–\-])\b[3-9]\d*\+?(?:\s*[–\-+to]+\s*[0-9]+)?\s*(?:years?|yrs?|yr|سنوات)\b",
-                    title_clean,
+                    requirement_text,
                 )
-            ) or bool(re.search(r"\b(خبرة\s*[3-9]|[3-9]\s*سنوات\s*خبرة)\b", title_clean))
+            ) or bool(re.search(r"\b(خبرة\s*[3-9]|[3-9]\s*سنوات\s*خبرة)\b", requirement_text))
 
             if not (has_senior_signal or has_high_exp):
                 return False
 
-        # 5. Mid-level hard filter
+
         elif requested_seniority == "mid":
-            # Reject entry-level and internship titles
+
             if any(re.search(pat, title_clean) for pat in cls.INTERN_PATTERNS):
                 return False
             if any(re.search(pat, title_clean) for pat in cls.ENTRY_PATTERNS):
                 return False
-            # Reject executive / director roles
+
             if any(re.search(p, title_clean) for p in [r"\bdirector\b", r"\bhead\b", r"\bchief\b", r"\bvp\b", r"\bprincipal\b", r"\bرئيس\b"]):
                 return False
 
-        # 6. Management / Director hard filter
+
         elif requested_seniority == "director":
             if any(re.search(pat, title_clean) for pat in cls.INTERN_PATTERNS):
                 return False
@@ -531,16 +605,16 @@ class JobClassifier:
             if not any(re.search(p, title_clean) for p in [r"\bmanager\b", r"\bdirector\b", r"\bhead\b", r"\bvp\b", r"\bchief\b", r"\bexecutive\b", r"\bمدير\b", r"\bرئيس\b"]):
                 return False
 
-        # 7. Employment type hard filter (contract / part-time / full-time)
+
         if requested_job_type == "contract":
             has_contract_signal = any(re.search(pat, title_clean) for pat in cls.CONTRACT_PATTERNS)
             has_full_time_signal = bool(re.search(r"\b(full[\s-]time|دوام[\s-]كامل|permanent|دائم)\b", title_clean))
 
-            # Exclude full-time/permanent roles when contract is requested unless contract signal exists
+
             if has_full_time_signal and not has_contract_signal:
                 return False
 
-            # Exclude student internships when contract work is requested
+
             if any(re.search(pat, title_clean) for pat in cls.INTERN_PATTERNS) and not has_contract_signal:
                 return False
 
@@ -569,17 +643,17 @@ class JobClassifier:
         title_clean = title.lower()
         kw_clean = requested_keyword.lower().strip()
 
-        # 1. Title keyword matching (up to 40 pts)
+
         if kw_clean in title_clean:
             score += 40
         else:
-            # Partial token matching
+
             kw_tokens = [tok for tok in re.split(r"[\s,\-_/]+", kw_clean) if len(tok) > 2]
             if kw_tokens:
                 matched_tokens = sum(1 for tok in kw_tokens if tok in title_clean)
                 score += int(30 * (matched_tokens / len(kw_tokens)))
 
-        # 2. Employment type & seniority match (up to 35 pts)
+
         sen_score = 0
         if requested_seniority == "internship" or requested_job_type == "internship":
             if any(re.search(pat, title_clean) for pat in cls.INTERN_PATTERNS):
@@ -610,17 +684,11 @@ class JobClassifier:
             sen_score = 20
         score += sen_score
 
-        # 3. Location match (up to 15 pts)
-        target_loc_clean = target_location.lower()
-        loc_clean = location.lower()
-        if target_loc_clean in loc_clean or loc_clean in target_loc_clean:
-            score += 15
-        elif "egypt" in loc_clean or "cairo" in loc_clean:
-            score += 10
-        else:
-            score += 5
 
-        # 4. Title conciseness & noise reduction (up to 10 pts)
+        if cls.matches_target_location(location, target_location):
+            score += 15
+
+
         if len(title) <= 60:
             score += 10
         else:
@@ -785,7 +853,7 @@ class LinkedInScraper:
         if not clean_keywords:
             return []
 
-        # Prepare targeted query plan and balance pagination depth
+
         query_plan_with_pages: List[Tuple[str, str, int]] = []
         for kw in clean_keywords:
             targeted = self._generate_targeted_queries(
@@ -815,7 +883,7 @@ class LinkedInScraper:
                 pct = min(step / max(total_queries, 1), 0.90)
                 safe_progress(
                     pct,
-                    f"عماد بينكش في LinkedIn على '{search_query}' (صفحة {page + 1})...",
+                    f"وصلة تبحث في LinkedIn عن '{search_query}' (صفحة {page + 1})...",
                 )
 
                 start = page * 25
@@ -847,7 +915,7 @@ class LinkedInScraper:
                     if resp.status_code == 429:
                         safe_progress(
                             0.92,
-                            "LinkedIn حس بوجودنا وبدأ يتقل.. عماد بيفرز اللي جمعه دلوقتي!",
+                            "LinkedIn بدأ يحدّ من الطلبات؛ وصلة تفرز النتائج المتاحة الآن.",
                         )
                         break
 
@@ -897,12 +965,12 @@ class LinkedInScraper:
                                     else self._normalize_string(date_elem.text)
                                 )
 
-                            # Deduplicate by company and title
+
                             dedup_key = self._make_dedup_key(company, raw_title)
                             if dedup_key in seen_dedup_keys:
                                 continue
 
-                            # Hard filtering gate
+
                             if not self.classifier.passes_hard_filter(
                                 title=raw_title,
                                 company=company,
@@ -912,14 +980,14 @@ class LinkedInScraper:
                             ):
                                 continue
 
-                            # Classify seniority, job type, and workplace
+
                             classified_seniority = self.classifier.detect_seniority(raw_title)
                             classified_type = self.classifier.detect_job_type(raw_title)
                             if classified_type == "غير محدد" and effective_job_type == "contract":
                                 classified_type = "عقد / عمل حر (Contract)"
                             classified_workplace = self.classifier.detect_workplace(raw_title, loc)
 
-                            # Calculate relevance score
+
                             relevance = self.classifier.calculate_relevance(
                                 title=raw_title,
                                 requested_keyword=original_kw,
@@ -957,9 +1025,9 @@ class LinkedInScraper:
                 except Exception:
                     continue
 
-        safe_progress(1.0, "عماد فرز الوظائف ورتبهالك بالأكثر دقة وملاءمة!")
+        safe_progress(1.0, "وصلة رتبت الوظائف حسب مدى ملاءمتها.")
 
-        # Rank results by relevance score descending
+
         ranked_jobs = sorted(raw_jobs, key=lambda j: j["relevance_score"], reverse=True)
 
         return ranked_jobs
@@ -972,8 +1040,17 @@ class JobDiscoveryEngine:
     Discovery -> Extraction -> Normalization -> Classification -> Hard Filtering -> Deduplication -> Relevance Ranking
     """
 
-    def __init__(self, sources: Optional[List[BaseJobSource]] = None):
-        self.sources = sources or [LinkedInSource(), TanqeebSource()]
+    def __init__(
+        self,
+        sources: Optional[List[BaseJobSource]] = None,
+        include_indeed: bool = True,
+        include_recruiter_posts: bool = True,
+    ):
+        self.sources = sources or [
+            LinkedInSource(), TanqeebSource(),
+            *([IndeedSource()] if include_indeed else []),
+            *([LinkedInRecruiterPostSource()] if include_recruiter_posts else []),
+        ]
         self.classifier = JobClassifier()
         self.last_metrics: Dict[str, Any] = {
             "source_counts": {},
@@ -992,6 +1069,7 @@ class JobDiscoveryEngine:
         workplace_type: str = "all",
         date_posted: str = "all",
         pages_per_keyword: int = 2,
+        exclude_emirati_only: bool = False,
         progress_callback: Optional[Callable[[float, str], None]] = None,
     ) -> List[Dict[str, Any]]:
         """
@@ -1016,15 +1094,14 @@ class JobDiscoveryEngine:
         source_counts: Dict[str, int] = {}
         total_sources = len(self.sources)
 
-        # 1. Discovery & Extraction across all configured sources
-        for idx, source in enumerate(self.sources):
-            source_pct_start = 0.05 + (idx / total_sources) * 0.55
-            safe_progress(
-                source_pct_start,
-                f"عماد بينكش في {source.source_name} على {', '.join(clean_keywords)}...",
-            )
-            try:
-                extracted = source.search(
+
+
+
+        safe_progress(0.05, f"وصلة تبحث في {total_sources} مصادر في نفس الوقت...")
+        with ThreadPoolExecutor(max_workers=total_sources) as executor:
+            futures = {
+                executor.submit(
+                    source.search,
                     keywords=clean_keywords,
                     location=location,
                     job_type=effective_job_type,
@@ -1032,40 +1109,51 @@ class JobDiscoveryEngine:
                     workplace_type=workplace_type,
                     date_posted=date_posted,
                     limit_per_query=25 * pages_per_keyword,
-                )
-                source_counts[source.source_name] = len(extracted)
-                raw_discovered.extend(extracted)
-            except Exception as src_err:
-                logger.error(f"Error executing source {source.source_name}: {src_err}", exc_info=True)
-                source_counts[source.source_name] = 0
+                ): source
+                for source in self.sources
+            }
+            completed = 0
+            for future in as_completed(futures):
+                source = futures[future]
+                completed += 1
+                try:
+                    extracted = future.result()
+                    source_counts[source.source_name] = len(extracted)
+                    raw_discovered.extend(extracted)
+                except Exception as src_err:
+                    logger.error("Error executing source %s: %s", source.source_name, src_err, exc_info=True)
+                    source_counts[source.source_name] = 0
+                safe_progress(0.05 + (completed / total_sources) * 0.55, f"اكتمل مصدر {source.source_name} ({completed}/{total_sources})")
 
-        safe_progress(0.65, "عماد بيفرز البيانات ويصنف مستويات الخبرة ونوع العمل...")
+        safe_progress(0.65, "وصلة تفرز البيانات وتصنف مستوى الخبرة ونوع العمل...")
 
-        # 2. Classification & Normalization across all discovered jobs
+
         primary_kw = clean_keywords[0] if clean_keywords else ""
         classified_jobs: List[UnifiedJob] = []
 
         for job in raw_discovered:
-            # Seniority classification
+
             job.seniority = self.classifier.detect_seniority(job.title)
 
-            # Job type classification
+
             detected_type = self.classifier.detect_job_type(job.title)
             if detected_type == "غير محدد" and effective_job_type == "contract":
                 detected_type = "عقد / عمل حر (Contract)"
             job.job_type = detected_type
 
-            # Workplace classification
+
             job.workplace_type = self.classifier.detect_workplace(job.title, job.location)
 
             classified_jobs.append(job)
 
-        safe_progress(0.75, "عماد بيطبق الفلاتر الصارمة عشان يستبعد أي حاجة مش مطابقة...")
+        safe_progress(0.75, "وصلة تطبق الفلاتر لاستبعاد النتائج غير المطابقة...")
 
-        # 3. Hard Filtering (Filter out irrelevant roles BEFORE deduplication)
+
         passed_filter_jobs: List[UnifiedJob] = []
+        emirati_excluded = 0
+        location_excluded = 0
         for job in classified_jobs:
-            # Derive original matching keyword if stored in raw_source_data
+
             matching_kw = job.raw_source_data.get("keyword", primary_kw)
 
             if not self.classifier.passes_hard_filter(
@@ -1074,19 +1162,34 @@ class JobDiscoveryEngine:
                 requested_keyword=matching_kw,
                 requested_job_type=effective_job_type,
                 requested_seniority=effective_seniority,
+                description=job.description,
             ):
                 continue
 
+            if not job.location_verified:
+                location_excluded += 1
+                continue
+
+            if not self.classifier.matches_target_location(job.location, location):
+                location_excluded += 1
+                continue
+
+            if self.classifier.has_emirati_only_requirement(job.title, job.company, job.description):
+                job.eligibility_note = "Emirati/UAE-national wording detected"
+                if exclude_emirati_only:
+                    emirati_excluded += 1
+                    continue
+
             passed_filter_jobs.append(job)
 
-        safe_progress(0.85, "عماد بيشيل الوظائف المكررة بين المصادر ويدمجها بذكاء...")
+        safe_progress(0.85, "وصلة تزيل الوظائف المكررة بين المصادر...")
 
-        # 4. Multi-Signal Deduplication
+
         unique_jobs, dup_count = JobDeduplicator.deduplicate_jobs(passed_filter_jobs)
 
-        safe_progress(0.92, "عماد بيرتب الفرص بالأكثر دقة وملاءمة لطلبك...")
+        safe_progress(0.92, "وصلة ترتب الفرص حسب ملاءمتها لطلبك...")
 
-        # 5. Relevance Ranking
+
         for job in unique_jobs:
             matching_kw = job.raw_source_data.get("keyword", primary_kw)
             job.relevance_score = self.classifier.calculate_relevance(
@@ -1098,19 +1201,21 @@ class JobDiscoveryEngine:
                 target_location=location,
             )
 
-        # Sort descending by relevance score
+
         ranked_jobs = sorted(unique_jobs, key=lambda j: j.relevance_score, reverse=True)
 
-        # Store discovery diagnostics
+
         self.last_metrics = {
             "source_counts": source_counts,
             "total_discovered": len(raw_discovered),
             "passed_filters": len(passed_filter_jobs),
             "duplicates_merged": dup_count,
             "unique_opportunities": len(ranked_jobs),
+            "emirati_excluded": emirati_excluded,
+            "location_excluded": location_excluded,
         }
 
-        safe_progress(1.0, "عماد فرز كل المصادر ورتبلك الفرص الحقيقية من غير تكرار!")
+        safe_progress(1.0, "وصلة أنهت البحث ورتبت الفرص بدون تكرار.")
 
         return [j.to_dict() for j in ranked_jobs]
 

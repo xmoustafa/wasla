@@ -31,7 +31,7 @@ class TanqeebSource(BaseJobSource):
         "Sec-Ch-Ua-Platform": '"Windows"',
     }
 
-    # Mapping of country/city keywords to Tanqeeb subdomain
+
     COUNTRY_SUBDOMAINS = {
         "saudi": "https://saudi.tanqeeb.com",
         "سعودية": "https://saudi.tanqeeb.com",
@@ -79,13 +79,13 @@ class TanqeebSource(BaseJobSource):
     def source_name(self) -> str:
         return "Tanqeeb"
 
-    def resolve_base_url(self, location: str) -> str:
+    def resolve_base_url(self, location: str) -> Optional[str]:
         """Resolve the appropriate Tanqeeb country subdomain based on location."""
         loc_lower = location.lower().strip()
         for key, base_url in self.COUNTRY_SUBDOMAINS.items():
             if key in loc_lower:
                 return base_url
-        return self.DEFAULT_BASE_URL
+        return None
 
     @staticmethod
     def _normalize_string(text: str) -> str:
@@ -106,10 +106,13 @@ class TanqeebSource(BaseJobSource):
     ) -> List[UnifiedJob]:
         """Fetch and extract jobs from Tanqeeb for Egypt, Saudi Arabia, UAE, etc."""
         base_url = self.resolve_base_url(location)
+        if not base_url:
+            logger.info("Tanqeeb does not support location '%s'; skipping source.", location)
+            return []
         extracted_jobs: List[UnifiedJob] = []
         seen_job_ids: Set[str] = set()
 
-        # Calculate pages needed based on limit (Tanqeeb provides ~40 jobs per page)
+
         max_pages = max(1, min(limit_per_query // 30, 2))
 
         for kw in keywords:
@@ -131,7 +134,7 @@ class TanqeebSource(BaseJobSource):
                         break
 
                     soup = BeautifulSoup(resp.content, "html.parser")
-                    # Select only top-level job cards (avoiding nested child containers)
+
                     cards = soup.find_all("div", class_=lambda c: c and "search-job-card" in c and "card-body" in c)
                     if not cards:
                         cards = soup.find_all("div", class_=lambda c: c and "search-job-card" in c)
@@ -140,7 +143,7 @@ class TanqeebSource(BaseJobSource):
 
                     for card in cards:
                         try:
-                            # 1. Job Title & Link
+
                             title_elem = card.find(["h2", "h3"], class_=lambda c: c and "search-job-title" in c)
                             if not title_elem:
                                 title_elem = card.find(["h2", "h3"])
@@ -158,7 +161,7 @@ class TanqeebSource(BaseJobSource):
                             raw_href = link_elem["href"].strip()
                             full_url = raw_href if raw_href.startswith("http") else f"{base_url}{raw_href}"
 
-                            # Extract unique job ID from URL (e.g. /021073318.html -> 021073318)
+
                             job_id_match = re.search(r"(\d{6,12})\.html", raw_href)
                             if job_id_match:
                                 job_id = f"tanqeeb_{job_id_match.group(1)}"
@@ -168,7 +171,7 @@ class TanqeebSource(BaseJobSource):
                             if not job_id or job_id in seen_job_ids:
                                 continue
 
-                            # 2. Company Name
+
                             company = "غير محدد"
                             company_elem = card.find("div", class_=lambda c: c and "search-job-company-name" in c)
                             if company_elem:
@@ -178,8 +181,8 @@ class TanqeebSource(BaseJobSource):
                                 if company_link:
                                     company = self._normalize_string(company_link.get_text())
 
-                            # 3. Location
-                            loc = location
+
+                            loc = "Unknown"
                             loc_elem = card.find("div", class_=lambda c: c and "search-job-company-city" in c)
                             if loc_elem:
                                 loc = self._normalize_string(loc_elem.get_text())
@@ -188,7 +191,7 @@ class TanqeebSource(BaseJobSource):
                                 if meta_loc:
                                     loc = self._normalize_string(meta_loc.get_text())
 
-                            # 4. Date Posted (Strictly match search-job-date and exclude separator dots)
+
                             arabic_digits = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
                             date_elem = card.find("span", class_=lambda c: c and "search-job-date" in c and "sep" not in c)
                             if not date_elem:
@@ -201,7 +204,7 @@ class TanqeebSource(BaseJobSource):
                                 if clean_date:
                                     posted_date = clean_date.translate(arabic_digits)
 
-                            # 5. Description Snippet (useful for matching & classification)
+
                             desc_snippet = ""
                             desc_elem = card.find("div", attrs={"data-jb-field": "description"}) or card.find("div", class_=lambda c: c and "description" in c)
                             if desc_elem:
@@ -224,6 +227,7 @@ class TanqeebSource(BaseJobSource):
                                         "base_url": base_url,
                                         "keyword": clean_kw,
                                     },
+                                    location_verified=loc != "Unknown",
                                 )
                             )
                         except Exception as parse_err:
