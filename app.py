@@ -764,7 +764,16 @@ html, body, .stApp { background: #f6f8fb !important; color: #14213d !important; 
 .job-card:hover { box-shadow: 0 8px 24px rgba(28, 63, 105, 0.12) !important; }
 .stDownloadButton > button { background: #ffffff !important; color: #253858 !important; border-color: #c9d5e3 !important; }
 ul[data-baseweb="menu"] { background: #ffffff !important; border-color: #d8e0ea !important; }
-li[role="option"] { color: #14213d !important; }
+/* Streamlit renders the open select menu in a BaseWeb popover.  Styling only
+   the closed selectbox left the menu dark after switching to light mode. */
+div[data-baseweb="popover"], div[role="listbox"], ul[role="listbox"],
+ul[data-baseweb="menu"] { background: #ffffff !important; border-color: #d8e0ea !important; }
+li[role="option"], div[role="option"] { color: #14213d !important; background: #ffffff !important; }
+li[role="option"]:hover, li[role="option"][aria-selected="true"],
+div[role="option"]:hover, div[role="option"][aria-selected="true"] {
+    background: #e8f1fb !important;
+    color: #14213d !important;
+}
 .wasla-footer { border-color: #d8e0ea !important; color: #526174 !important; }
 </style>
 """ if light_mode else ""
@@ -1289,7 +1298,7 @@ st.markdown(
     <div class="wasla-footer">
         <span>وصلة | Wasla</span>
         <span>•</span>
-        <a href="https://xmoustafa.github.io" target="_blank" rel="noopener noreferrer">تواصل مع Moustafa</a>
+        <a href="https://x.com/Prosox0x0" target="_blank" rel="noopener noreferrer">تواصل مع Prosox0x0 على X</a>
         <span>•</span>
         <span>Forked from <a href="https://github.com/qenawy1/EMAD" target="_blank" rel="noopener noreferrer">qenawy1/EMAD</a></span>
     </div>
