@@ -142,6 +142,27 @@ class JobClassifier:
         r"توطين",
     ]
 
+    SAUDI_ONLY_PATTERNS = [
+        r"\bsaudi\s*nationals?\s*(only|exclusive|only need apply)?\b",
+        r"\bfor\s+saudi\s+nationals?\b",
+        r"\bsaudization\b",
+        r"\bsaudiization\b",
+        r"\bsaudi\s+only\b",
+        r"للسعوديين\s+فقط",
+        r"للمواطنين\s+السعوديين",
+        r"سعودة",
+    ]
+
+    GCC_NATIONAL_ONLY_PATTERNS = [
+        r"\bgcc\s*nationals?\s*(only|exclusive|only need apply)?\b",
+        r"\bgulf\s*nationals?\s*(only|exclusive)?\b",
+        r"\bgcc\s+citizens?\s*(only|exclusive)?\b",
+        r"\bfor\s+gcc\s+nationals?\b",
+        r"لمواطني\s+دول\s+مجلس\s+التعاون",
+        r"للمواطنين\s+الخليجيين",
+        r"الخليجيين\s+فقط",
+    ]
+
     LOCATION_GROUPS = {
         "uae": ["uae", "united arab emirates", "الإمارات", "الامارات", "dubai", "abu dhabi", "sharjah", "ajman", "fujairah", "ras al khaimah"],
         "egypt": ["egypt", "مصر", "cairo", "alexandria", "giza"],
@@ -173,6 +194,18 @@ class JobClassifier:
         """Return true when a listing explicitly targets UAE nationals."""
         searchable = " ".join(text or "" for text in texts).lower()
         return any(re.search(pattern, searchable, re.IGNORECASE) for pattern in cls.EMIRATI_ONLY_PATTERNS)
+
+    @classmethod
+    def has_saudi_only_requirement(cls, *texts: str) -> bool:
+        """Return true when a listing explicitly targets Saudi nationals."""
+        searchable = " ".join(text or "" for text in texts).lower()
+        return any(re.search(pattern, searchable, re.IGNORECASE) for pattern in cls.SAUDI_ONLY_PATTERNS)
+
+    @classmethod
+    def has_gcc_national_only_requirement(cls, *texts: str) -> bool:
+        """Return true when a listing explicitly targets GCC nationals."""
+        searchable = " ".join(text or "" for text in texts).lower()
+        return any(re.search(pattern, searchable, re.IGNORECASE) for pattern in cls.GCC_NATIONAL_ONLY_PATTERNS)
 
     @classmethod
     def matches_target_location(cls, job_location: str, target_location: str) -> bool:
@@ -1070,6 +1103,8 @@ class JobDiscoveryEngine:
         date_posted: str = "all",
         pages_per_keyword: int = 2,
         exclude_emirati_only: bool = False,
+        exclude_saudi_only: bool = False,
+        exclude_gcc_national_only: bool = False,
         progress_callback: Optional[Callable[[float, str], None]] = None,
     ) -> List[Dict[str, Any]]:
         """
@@ -1151,6 +1186,8 @@ class JobDiscoveryEngine:
 
         passed_filter_jobs: List[UnifiedJob] = []
         emirati_excluded = 0
+        saudi_excluded = 0
+        gcc_national_excluded = 0
         location_excluded = 0
         for job in classified_jobs:
 
@@ -1174,11 +1211,25 @@ class JobDiscoveryEngine:
                 location_excluded += 1
                 continue
 
-            if self.classifier.has_emirati_only_requirement(job.title, job.company, job.description):
-                job.eligibility_note = "Emirati/UAE-national wording detected"
+            eligibility_text = (job.title, job.company, job.description)
+            eligibility_requirements = []
+            if self.classifier.has_emirati_only_requirement(*eligibility_text):
+                eligibility_requirements.append("Emirati/UAE-national wording")
                 if exclude_emirati_only:
                     emirati_excluded += 1
                     continue
+            if self.classifier.has_saudi_only_requirement(*eligibility_text):
+                eligibility_requirements.append("Saudi-national wording")
+                if exclude_saudi_only:
+                    saudi_excluded += 1
+                    continue
+            if self.classifier.has_gcc_national_only_requirement(*eligibility_text):
+                eligibility_requirements.append("GCC-national wording")
+                if exclude_gcc_national_only:
+                    gcc_national_excluded += 1
+                    continue
+            if eligibility_requirements:
+                job.eligibility_note = " · ".join(eligibility_requirements) + " detected"
 
             passed_filter_jobs.append(job)
 
@@ -1212,6 +1263,8 @@ class JobDiscoveryEngine:
             "duplicates_merged": dup_count,
             "unique_opportunities": len(ranked_jobs),
             "emirati_excluded": emirati_excluded,
+            "saudi_excluded": saudi_excluded,
+            "gcc_national_excluded": gcc_national_excluded,
             "location_excluded": location_excluded,
         }
 

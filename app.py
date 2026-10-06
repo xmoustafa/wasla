@@ -928,14 +928,30 @@ with col_wp:
     selected_workplace = WORKPLACE_TYPES[workplace_label]
 
 st.markdown("<div style='height:0.55rem'></div>", unsafe_allow_html=True)
+st.markdown("#### فلتر الأهلية ومتطلبات التوطين")
+st.caption("يخفي فقط الإعلانات التي تذكر صراحة شرط جنسية أو توطين محدد؛ لا يفترض أي معلومات عنك.")
+eligibility_col_uae, eligibility_col_saudi, eligibility_col_gcc = st.columns(3)
+with eligibility_col_uae:
+    exclude_emirati_only = st.checkbox(
+        "تجاهل توطين الإماراتيين",
+        value=True,
+        help="يخفي الإعلانات التي تذكر بوضوح UAE National / Emirati / Emiratisation.",
+    )
+with eligibility_col_saudi:
+    exclude_saudi_only = st.checkbox(
+        "تجاهل إعلانات السعوديين فقط",
+        value=True,
+        help="يخفي الإعلانات التي تذكر بوضوح Saudi National / Saudization / Saudi only.",
+    )
+with eligibility_col_gcc:
+    exclude_gcc_national_only = st.checkbox(
+        "تجاهل إعلانات مواطني GCC فقط",
+        value=True,
+        help="يخفي الإعلانات التي تذكر بوضوح GCC National / Gulf National / مواطني مجلس التعاون.",
+    )
+
 filters_top_left, filters_top_right = st.columns(2)
 with filters_top_left:
-    exclude_emirati_only = st.checkbox(
-        "استبعاد وظائف الإماراتيين فقط",
-        value=True,
-        help="يستبعد الإعلانات التي تذكر بوضوح UAE National / Emirati / Emiratisation.",
-    )
-with filters_top_right:
     internship_no_experience_only = st.checkbox(
         "Internship: بدون خبرة مطلوبة",
         value=False,
@@ -1017,6 +1033,8 @@ search_fingerprint = (
     target_location_query.strip().lower(),
     selected_date_posted,
     exclude_emirati_only,
+    exclude_saudi_only,
+    exclude_gcc_national_only,
     include_indeed,
     include_recruiter_posts,
     fast_search,
@@ -1074,6 +1092,8 @@ if search_clicked:
                     date_posted=selected_date_posted,
                     pages_per_keyword=1 if fast_search else 2,
                     exclude_emirati_only=exclude_emirati_only,
+                    exclude_saudi_only=exclude_saudi_only,
+                    exclude_gcc_national_only=exclude_gcc_national_only,
                     progress_callback=update_progress,
                 )
             st.session_state["scraped_jobs"] = jobs
@@ -1126,12 +1146,18 @@ if results:
         metrics = st.session_state.get("discovery_metrics", {})
         location_excluded = metrics.get("location_excluded", 0)
         emirati_excluded = metrics.get("emirati_excluded", 0)
-        if location_excluded or emirati_excluded:
+        saudi_excluded = metrics.get("saudi_excluded", 0)
+        gcc_national_excluded = metrics.get("gcc_national_excluded", 0)
+        if location_excluded or emirati_excluded or saudi_excluded or gcc_national_excluded:
             notes = []
             if location_excluded:
                 notes.append(f"تم استبعاد {location_excluded} نتيجة خارج الموقع المختار")
             if emirati_excluded:
-                notes.append(f"تم استبعاد {emirati_excluded} وظيفة للإماراتيين فقط")
+                notes.append(f"تم إخفاء {emirati_excluded} إعلانًا بتوطين إماراتي صريح")
+            if saudi_excluded:
+                notes.append(f"تم إخفاء {saudi_excluded} إعلانًا للسعوديين فقط")
+            if gcc_national_excluded:
+                notes.append(f"تم إخفاء {gcc_national_excluded} إعلانًا لمواطني GCC فقط")
             st.caption(" | ".join(notes))
     with top_bar_col2:
         csv_bytes = df.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
