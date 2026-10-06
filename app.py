@@ -1298,7 +1298,7 @@ st.markdown(
     <div class="wasla-footer">
         <span>وصلة | Wasla</span>
         <span>•</span>
-        <a href="https://x.com/Prosox0x0" target="_blank" rel="noopener noreferrer">تواصل مع Prosox0x0 على X</a>
+        <a href="https://x.com/Prosox0x0" target="_blank" rel="noopener noreferrer">تواصل مع Moustafa على X</a>
         <span>•</span>
         <span>Forked from <a href="https://github.com/qenawy1/EMAD" target="_blank" rel="noopener noreferrer">qenawy1/EMAD</a></span>
     </div>
