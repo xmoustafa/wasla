@@ -51,7 +51,7 @@ st.markdown(
 
     /* ─── Typography ────────────────────────────────────────── */
     h1, h2, h3, h4, h5, h6,
-    p, label, div, span,
+    p, label,
     .stMarkdown, .stText {
         direction: rtl !important;
         text-align: right !important;
@@ -920,12 +920,17 @@ st.markdown(
     f"""
     <style>
       html, body, .stApp {{ direction: {ui_direction} !important; }}
+      [data-testid="stHorizontalBlock"] {{ direction: ltr !important; width: 100% !important; overflow: visible !important; }}
+      [data-testid="stColumn"] {{ direction: {ui_direction} !important; min-width: 0 !important; }}
+      [data-testid="stExpander"] {{ direction: {ui_direction} !important; overflow: visible !important; }}
+      [data-testid="stExpander"] summary {{ direction: {ui_direction} !important; text-align: {'right' if ui_direction == 'rtl' else 'left'} !important; white-space: normal !important; }}
+      [data-testid="stCheckbox"], [data-testid="stRadio"] {{ direction: {ui_direction} !important; }}
+      [data-testid="stCheckbox"] label, [data-testid="stRadio"] label {{ direction: {ui_direction} !important; text-align: {'right' if ui_direction == 'rtl' else 'left'} !important; }}
       .stSelectbox [data-baseweb="select"],
       .stSelectbox [data-baseweb="select"] > div,
       .stTextInput input {{ direction: {ui_direction} !important; text-align: {'right' if ui_direction == 'rtl' else 'left'} !important; }}
       .stRadio > label, .stSelectbox > label, .stTextInput > label {{ direction: {ui_direction} !important; }}
       [data-baseweb="popover"] *, ul[role="listbox"] *, li[role="option"] {{ direction: {ui_direction} !important; text-align: {'right' if ui_direction == 'rtl' else 'left'} !important; }}
-      [data-testid="stHorizontalBlock"] {{ min-width: 0 !important; }}
       @media (max-width: 760px) {{
         .stRadio > div {{ flex-wrap: wrap !important; gap: .25rem !important; }}
         .stRadio label {{ white-space: nowrap !important; }}
