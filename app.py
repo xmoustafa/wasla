@@ -11,7 +11,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-light_mode = st.session_state.get("wasla_light_mode", False)
+light_mode = st.session_state.get("wasla_light_mode", True)
 
 
 st.markdown(
@@ -896,15 +896,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-language_left, search_left, theme_right = st.columns([2.8, 2.8, 1])
-with language_left:
-    ui_language = st.radio(
-        "واجهة الموقع / Site language",
-        options=["العربية", "English", "Deutsch"],
-        index=0,
-        horizontal=True,
-        key="wasla_ui_language",
-    )
+search_left, theme_right = st.columns([5, 1])
+ui_language = "العربية"
 with search_left:
     search_language = st.selectbox(
         "لغة النتائج / Search language",
@@ -913,15 +906,15 @@ with search_left:
         help="يضيف وصلة المرادفات الألمانية تلقائيًا إلى البحث، خصوصًا لو اخترت مدينة في ألمانيا.",
     )
 with theme_right:
-    st.toggle("☀️", key="wasla_light_mode", help="تبديل بين الوضع الفاتح والداكن")
+    st.toggle("☀️ فاتح", key="wasla_light_mode", help="تبديل بين الوضع الفاتح والداكن")
 
-ui_direction = "rtl" if ui_language == "العربية" else "ltr"
+ui_direction = "rtl"
 st.markdown(
     f"""
     <style>
       html, body, .stApp {{ direction: {ui_direction} !important; }}
-      [data-testid="stHorizontalBlock"] {{ direction: ltr !important; width: 100% !important; overflow: visible !important; }}
-      [data-testid="stColumn"] {{ direction: {ui_direction} !important; min-width: 0 !important; }}
+      [data-testid="stHorizontalBlock"] {{ direction: rtl !important; width: 100% !important; overflow: visible !important; }}
+      [data-testid="stColumn"] {{ direction: rtl !important; min-width: 0 !important; }}
       [data-testid="stExpander"] {{ direction: {ui_direction} !important; overflow: visible !important; }}
       [data-testid="stExpander"] summary {{ direction: {ui_direction} !important; text-align: {'right' if ui_direction == 'rtl' else 'left'} !important; white-space: normal !important; }}
       [data-testid="stCheckbox"], [data-testid="stRadio"] {{ direction: {ui_direction} !important; }}
@@ -1129,7 +1122,6 @@ search_fingerprint = (
     include_indeed_germany,
     include_make_it_germany,
     search_language,
-    ui_language,
     fast_search,
     internship_no_experience_only,
 )
