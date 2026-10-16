@@ -890,22 +890,50 @@ st.markdown(
             وصلة | Wasla
             <span class="wasla-logo-dot"></span>
         </div>
-        <div class="wasla-title">وصلة للفرصة المناسبة <span>ابدأ البحث</span></div>
+        <div class="wasla-title">Wasla <span>Find your next opportunity</span></div>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-language_left, theme_right = st.columns([5, 1])
+language_left, search_left, theme_right = st.columns([2.8, 2.8, 1])
 with language_left:
+    ui_language = st.radio(
+        "واجهة الموقع / Site language",
+        options=["العربية", "English", "Deutsch"],
+        index=0,
+        horizontal=True,
+        key="wasla_ui_language",
+    )
+with search_left:
     search_language = st.selectbox(
-        "لغة البحث / Search language",
+        "لغة النتائج / Search language",
         options=["English + Deutsch", "Deutsch / German"],
         index=0,
         help="يضيف وصلة المرادفات الألمانية تلقائيًا إلى البحث، خصوصًا لو اخترت مدينة في ألمانيا.",
     )
 with theme_right:
-    st.toggle("☀️ فاتح", key="wasla_light_mode", help="تبديل بين الوضع الفاتح والداكن")
+    st.toggle("☀️", key="wasla_light_mode", help="تبديل بين الوضع الفاتح والداكن")
+
+ui_direction = "rtl" if ui_language == "العربية" else "ltr"
+st.markdown(
+    f"""
+    <style>
+      html, body, .stApp {{ direction: {ui_direction} !important; }}
+      .stSelectbox [data-baseweb="select"],
+      .stSelectbox [data-baseweb="select"] > div,
+      .stTextInput input {{ direction: {ui_direction} !important; text-align: {'right' if ui_direction == 'rtl' else 'left'} !important; }}
+      .stRadio > label, .stSelectbox > label, .stTextInput > label {{ direction: {ui_direction} !important; }}
+      [data-baseweb="popover"] *, ul[role="listbox"] *, li[role="option"] {{ direction: {ui_direction} !important; text-align: {'right' if ui_direction == 'rtl' else 'left'} !important; }}
+      [data-testid="stHorizontalBlock"] {{ min-width: 0 !important; }}
+      @media (max-width: 760px) {{
+        .stRadio > div {{ flex-wrap: wrap !important; gap: .25rem !important; }}
+        .stRadio label {{ white-space: nowrap !important; }}
+      }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 keywords_input = st.text_input(
@@ -1042,7 +1070,8 @@ st.markdown("</div>", unsafe_allow_html=True)
 
 
 st.markdown("<div style='height:0.2rem'></div>", unsafe_allow_html=True)
-search_clicked = st.button("شوفلي الشغل ", type="primary", use_container_width=True)
+search_cta = {"العربية": "شوفلي الشغل", "English": "Find jobs", "Deutsch": "Jobs finden"}.get(ui_language, "شوفلي الشغل")
+search_clicked = st.button(search_cta, type="primary", use_container_width=True)
 language_terms = "hiring vacancy open position einstellen gesucht Bewerbung" if search_language == "English + Deutsch" else "einstellen gesucht Bewerbung Stellenausschreibung"
 post_search_terms = " ".join(
     term for term in [keywords_input.strip(), skill_keywords_input.strip(), language_terms, target_location_query.strip()]
@@ -1058,14 +1087,14 @@ linkedin_xray_url = "https://www.google.com/search?q=" + quote_plus(
 link_col_one, link_col_two = st.columns(2)
 with link_col_one:
     st.link_button(
-        "افتح LinkedIn Posts Search بالبحث ده ↗",
+        {"العربية": "افتح LinkedIn Posts Search بالبحث ده ↗", "English": "Open LinkedIn Posts Search ↗", "Deutsch": "LinkedIn-Posts öffnen ↗"}.get(ui_language, "افتح LinkedIn Posts Search بالبحث ده ↗"),
         linkedin_content_search_url,
         use_container_width=True,
         help="بحث مباشر في محتوى LinkedIn؛ يتطلب تسجيل دخولك.",
     )
 with link_col_two:
     st.link_button(
-        "بحث Google عن بوستات LinkedIn ↗",
+        {"العربية": "بحث Google عن بوستات LinkedIn ↗", "English": "Google X-Ray for LinkedIn posts ↗", "Deutsch": "Google X-Ray für LinkedIn-Posts ↗"}.get(ui_language, "بحث Google عن بوستات LinkedIn ↗"),
         linkedin_xray_url,
         use_container_width=True,
         help="تقنية X-Ray إضافية للعثور على بوستات التوظيف العامة.",
@@ -1095,6 +1124,7 @@ search_fingerprint = (
     include_indeed_germany,
     include_make_it_germany,
     search_language,
+    ui_language,
     fast_search,
     internship_no_experience_only,
 )
