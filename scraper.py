@@ -11,8 +11,9 @@ import requests
 from bs4 import BeautifulSoup
 
 from sources import (
-    BaseJobSource, IndeedSource, LinkedInRecruiterPostSource, LinkedInSource,
-    TanqeebSource, UnifiedJob,
+    BaseJobSource, BundesagenturSource, IndeedGermanySource, IndeedSource,
+    LinkedInRecruiterPostSource, LinkedInSource, MakeItGermanySource,
+    StepStoneSource, TanqeebSource, UnifiedJob, XingSource,
 )
 from dedup import JobDeduplicator
 
@@ -168,7 +169,7 @@ class JobClassifier:
         "egypt": ["egypt", "مصر", "cairo", "alexandria", "giza"],
         "saudi": ["saudi arabia", "saudi", "السعودية", "السعوديه", "riyadh", "jeddah", "dammam"],
         "qatar": ["qatar", "قطر", "doha", "الدوحة", "الدوحه", "al rayyan", "الريان"],
-        "germany": ["germany", "ألمانيا", "المانيا", "berlin", "munich", "hamburg", "frankfurt"],
+        "germany": ["germany", "deutschland", "ألمانيا", "المانيا", "berlin", "munich", "münchen", "hamburg", "frankfurt", "cologne", "köln", "düsseldorf"],
         "netherlands": ["netherlands", "holland", "هولندا", "amsterdam", "rotterdam", "the hague", "utrecht"],
     }
     CITY_ALIASES = {
@@ -176,6 +177,8 @@ class JobClassifier:
         "abu_dhabi": ["abu dhabi", "abu-dhabi", "أبوظبي", "ابوظبي"],
         "doha": ["doha", "الدوحة", "الدوحه"],
         "berlin": ["berlin"],
+        "dusseldorf": ["düsseldorf", "dusseldorf"],
+        "cologne": ["cologne", "köln", "koeln"],
         "munich": ["munich", "münchen"],
         "hamburg": ["hamburg"],
         "frankfurt": ["frankfurt"],
@@ -252,6 +255,30 @@ class JobClassifier:
         "intern", "internship", "trainee", "training", "co-op",
         "apprentice", "apprenticeship", "student", "تدريب", "متدرب", "طلبة"
     }
+
+    ROLE_TRANSLATIONS = {
+        "cyber security": ("cybersecurity", "cybersicherheit", "informationssicherheit", "it-sicherheit"),
+        "cybersecurity": ("cyber security", "cybersicherheit", "informationssicherheit", "it-sicherheit"),
+        "soc analyst": ("soc-analyst", "security analyst", "sicherheitsanalyst"),
+        "security analyst": ("soc analyst", "sicherheitsanalyst", "it-sicherheitsanalyst"),
+        "penetration tester": ("penetrationstester", "pentester", "ethical hacker"),
+        "security engineer": ("sicherheitsingenieur", "it-security engineer"),
+        "security researcher": ("sicherheitsforscher", "security researcher"),
+        "malware analyst": ("malware-analyst", "schadsoftware-analyst"),
+    }
+
+    @classmethod
+    def expand_keyword(cls, keyword: str) -> List[str]:
+        """Add high-signal German equivalents while retaining the original query."""
+        clean = " ".join((keyword or "").strip().split())
+        if not clean:
+            return []
+        variants = [clean]
+        lowered = clean.lower()
+        for source, translations in cls.ROLE_TRANSLATIONS.items():
+            if source in lowered:
+                variants.extend(translations)
+        return list(dict.fromkeys(variants))
 
     @classmethod
     def is_experience_required(cls, title: str) -> bool:
@@ -498,6 +525,10 @@ class JobClassifier:
 
         if kw_clean in title_clean:
             return True
+
+        for source, translations in cls.ROLE_TRANSLATIONS.items():
+            if source in kw_clean and any(term in title_clean for term in translations):
+                return True
 
 
         if kw_clean in ["contract", "freelance", "freelancer", "عقد", "عمل حر", "intern", "internship", "تدريب", "وظيفة", "شغل", "job"]:
@@ -1078,11 +1109,21 @@ class JobDiscoveryEngine:
         sources: Optional[List[BaseJobSource]] = None,
         include_indeed: bool = True,
         include_recruiter_posts: bool = True,
+        include_stepstone: bool = True,
+        include_bundesagentur: bool = True,
+        include_xing: bool = True,
+        include_indeed_germany: bool = True,
+        include_make_it_germany: bool = True,
     ):
         self.sources = sources or [
             LinkedInSource(), TanqeebSource(),
             *([IndeedSource()] if include_indeed else []),
             *([LinkedInRecruiterPostSource()] if include_recruiter_posts else []),
+            *([StepStoneSource()] if include_stepstone else []),
+            *([BundesagenturSource()] if include_bundesagentur else []),
+            *([XingSource()] if include_xing else []),
+            *([IndeedGermanySource()] if include_indeed_germany else []),
+            *([MakeItGermanySource()] if include_make_it_germany else []),
         ]
         self.classifier = JobClassifier()
         self.last_metrics: Dict[str, Any] = {
@@ -1101,6 +1142,7 @@ class JobDiscoveryEngine:
         seniority: str = "all",
         workplace_type: str = "all",
         date_posted: str = "all",
+        skill_keywords: Optional[List[str]] = None,
         pages_per_keyword: int = 2,
         exclude_emirati_only: bool = False,
         exclude_saudi_only: bool = False,
@@ -1125,6 +1167,21 @@ class JobDiscoveryEngine:
                 except Exception:
                     pass
 
+        clean_skill_keywords = [term.strip() for term in (skill_keywords or []) if term and term.strip()]
+        expanded_keywords = []
+        expanded_keyword_origin = {}
+        for keyword in clean_keywords:
+            for variant in self.classifier.expand_keyword(keyword):
+                expanded_keywords.append(variant)
+                expanded_keyword_origin[variant] = keyword
+        expanded_keywords = list(dict.fromkeys(expanded_keywords))
+        search_keywords = []
+        base_keyword_by_query = {}
+        for keyword in expanded_keywords:
+            query = " ".join([keyword, *clean_skill_keywords]).strip()
+            search_keywords.append(query)
+            base_keyword_by_query[query] = expanded_keyword_origin.get(keyword, clean_keywords[0])
+
         raw_discovered: List[UnifiedJob] = []
         source_counts: Dict[str, int] = {}
         total_sources = len(self.sources)
@@ -1137,7 +1194,7 @@ class JobDiscoveryEngine:
             futures = {
                 executor.submit(
                     source.search,
-                    keywords=clean_keywords,
+                    keywords=search_keywords,
                     location=location,
                     job_type=effective_job_type,
                     seniority=effective_seniority,
@@ -1191,7 +1248,8 @@ class JobDiscoveryEngine:
         location_excluded = 0
         for job in classified_jobs:
 
-            matching_kw = job.raw_source_data.get("keyword", primary_kw)
+            source_query = job.raw_source_data.get("keyword", primary_kw)
+            matching_kw = base_keyword_by_query.get(source_query, primary_kw)
 
             if not self.classifier.passes_hard_filter(
                 title=job.title,
@@ -1242,7 +1300,8 @@ class JobDiscoveryEngine:
 
 
         for job in unique_jobs:
-            matching_kw = job.raw_source_data.get("keyword", primary_kw)
+            source_query = job.raw_source_data.get("keyword", primary_kw)
+            matching_kw = base_keyword_by_query.get(source_query, primary_kw)
             job.relevance_score = self.classifier.calculate_relevance(
                 title=job.title,
                 requested_keyword=matching_kw,
@@ -1250,6 +1309,13 @@ class JobDiscoveryEngine:
                 requested_seniority=effective_seniority,
                 location=job.location,
                 target_location=location,
+            )
+            searchable_text = f"{job.title} {job.description}".lower()
+            # Optional skills/certifications are a ranking signal, not a hard
+            # rejection rule: job boards often omit them from the preview text.
+            job.relevance_score += min(
+                30,
+                sum(10 for term in clean_skill_keywords if term.lower() in searchable_text),
             )
 
 

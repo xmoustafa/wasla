@@ -46,7 +46,7 @@ class LinkedInRecruiterPostSource(BaseJobSource):
             "dubai": ("dubai",), "abu dhabi": ("abu dhabi",), "cairo": ("cairo",),
             "egypt": ("egypt", "cairo"), "riyadh": ("riyadh",), "saudi arabia": ("saudi", "riyadh", "jeddah"),
             "qatar": ("qatar", "doha"), "doha": ("doha",),
-            "germany": ("germany", "berlin", "munich", "hamburg", "frankfurt"), "berlin": ("berlin",), "munich": ("munich",),
+            "germany": ("germany", "deutschland", "berlin", "munich", "münchen", "hamburg", "frankfurt", "cologne", "köln", "düsseldorf"), "berlin": ("berlin",), "munich": ("munich", "münchen"), "cologne": ("cologne", "köln", "koeln"), "düsseldorf": ("düsseldorf", "dusseldorf"),
             "netherlands": ("netherlands", "amsterdam", "rotterdam", "the hague", "utrecht"), "amsterdam": ("amsterdam",), "rotterdam": ("rotterdam",),
         }
         target = location.lower()

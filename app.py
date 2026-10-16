@@ -832,7 +832,9 @@ COUNTRIES = {
     "ألمانيا": {
         "ألمانيا كلها": "Germany",
         "برلين (Berlin)": "Berlin, Germany",
-        "ميون (Munich)": "Munich, Germany",
+        "دوسلدورف (Düsseldorf)": "Düsseldorf, Germany",
+        "كولن (Köln / Cologne)": "Cologne, Germany",
+        "ميونخ (München / Munich)": "Munich, Germany",
         "هامبورغ (Hamburg)": "Hamburg, Germany",
         "فرانكفورت (Frankfurt)": "Frankfurt, Germany",
         "مدينة تانية (كتابة يدوية)": "__custom__",
@@ -894,7 +896,14 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-theme_left, theme_right = st.columns([5, 1])
+language_left, theme_right = st.columns([5, 1])
+with language_left:
+    search_language = st.selectbox(
+        "لغة البحث / Search language",
+        options=["English + Deutsch", "Deutsch / German"],
+        index=0,
+        help="يضيف وصلة المرادفات الألمانية تلقائيًا إلى البحث، خصوصًا لو اخترت مدينة في ألمانيا.",
+    )
 with theme_right:
     st.toggle("☀️ فاتح", key="wasla_light_mode", help="تبديل بين الوضع الفاتح والداكن")
 
@@ -904,6 +913,12 @@ keywords_input = st.text_input(
     value="Data Analyst",
     placeholder="مثلاً: Python, Data Analyst, Flutter...",
     help="ممكن تكتب أكتر من مسمى وتفصل بينهم بفاصلة (,) ووصلة هتدور عليهم كلهم.",
+)
+
+skill_keywords_input = st.text_input(
+    "Keywords للمهارات والشهادات (اختياري)",
+    placeholder="مثلاً: Python, AWS, CCNA, German B2, Visa Sponsorship",
+    help="اكتب مهارات، أدوات، شهادات أو متطلبات تريد تقوية البحث بها. تُستخدم في البحث وترفع ترتيب النتائج المطابقة.",
 )
 
 st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
@@ -937,27 +952,27 @@ with col_wp:
     selected_workplace = WORKPLACE_TYPES[workplace_label]
 
 st.markdown("<div style='height:0.55rem'></div>", unsafe_allow_html=True)
-st.markdown("#### فلتر الأهلية ومتطلبات التوطين")
-st.caption("يخفي فقط الإعلانات التي تذكر صراحة شرط جنسية أو توطين محدد؛ لا يفترض أي معلومات عنك.")
-eligibility_col_uae, eligibility_col_saudi, eligibility_col_gcc = st.columns(3)
-with eligibility_col_uae:
-    exclude_emirati_only = st.checkbox(
-        "تجاهل توطين الإماراتيين",
-        value=True,
-        help="يخفي الإعلانات التي تذكر بوضوح UAE National / Emirati / Emiratisation.",
-    )
-with eligibility_col_saudi:
-    exclude_saudi_only = st.checkbox(
-        "تجاهل إعلانات السعوديين فقط",
-        value=True,
-        help="يخفي الإعلانات التي تذكر بوضوح Saudi National / Saudization / Saudi only.",
-    )
-with eligibility_col_gcc:
-    exclude_gcc_national_only = st.checkbox(
-        "تجاهل إعلانات مواطني GCC فقط",
-        value=True,
-        help="يخفي الإعلانات التي تذكر بوضوح GCC National / Gulf National / مواطني مجلس التعاون.",
-    )
+with st.expander("⚙️ فلتر الأهلية ومتطلبات التوطين (مفعّل افتراضيًا)", expanded=False):
+    st.caption("افتح الخانة لتغيير الفلاتر. وصلة تخفي فقط شرط الجنسية/التوطين المكتوب صراحة في الإعلان.")
+    eligibility_col_uae, eligibility_col_saudi, eligibility_col_gcc = st.columns(3)
+    with eligibility_col_uae:
+        exclude_emirati_only = st.checkbox(
+            "تجاهل توطين الإماراتيين",
+            value=True,
+            help="يخفي الإعلانات التي تذكر بوضوح UAE National / Emirati / Emiratisation.",
+        )
+    with eligibility_col_saudi:
+        exclude_saudi_only = st.checkbox(
+            "تجاهل إعلانات السعوديين فقط",
+            value=True,
+            help="يخفي الإعلانات التي تذكر بوضوح Saudi National / Saudization / Saudi only.",
+        )
+    with eligibility_col_gcc:
+        exclude_gcc_national_only = st.checkbox(
+            "تجاهل إعلانات مواطني GCC فقط",
+            value=True,
+            help="يخفي الإعلانات التي تذكر بوضوح GCC National / Gulf National / مواطني مجلس التعاون.",
+        )
 
 filters_top_left, filters_top_right = st.columns(2)
 with filters_top_left:
@@ -975,6 +990,20 @@ with filters_bottom_right:
         value=True,
         help="يعرض بوستات توظيف عامة كفرص تواصل؛ قد تحتاج لمراسلة الناشر بدلاً من زر تقديم مباشر.",
     )
+with st.expander("مصادر ألمانيا الإضافية", expanded=False):
+    st.caption("تظهر هذه المصادر نتائج فقط عندما تختار ألمانيا أو مدينة ألمانية.")
+    germany_source_one, germany_source_two, germany_source_three = st.columns(3)
+    with germany_source_one:
+        include_stepstone = st.checkbox("StepStone", value=True)
+    with germany_source_two:
+        include_bundesagentur = st.checkbox("Jobsuche الحكومية", value=True)
+    with germany_source_three:
+        include_xing = st.checkbox("XING Jobs", value=True)
+    germany_source_four, germany_source_five = st.columns(2)
+    with germany_source_four:
+        include_indeed_germany = st.checkbox("Indeed Deutschland", value=True)
+    with germany_source_five:
+        include_make_it_germany = st.checkbox("Make it in Germany", value=True)
 fast_search = st.checkbox(
     "بحث سريع (صفحة واحدة لكل مصدر)",
     value=True,
@@ -1014,20 +1043,33 @@ st.markdown("</div>", unsafe_allow_html=True)
 
 st.markdown("<div style='height:0.2rem'></div>", unsafe_allow_html=True)
 search_clicked = st.button("شوفلي الشغل ", type="primary", use_container_width=True)
+language_terms = "hiring vacancy open position einstellen gesucht Bewerbung" if search_language == "English + Deutsch" else "einstellen gesucht Bewerbung Stellenausschreibung"
 post_search_terms = " ".join(
-    term for term in [keywords_input.strip(), "hiring", "vacancy", "open position", target_location_query.strip()]
+    term for term in [keywords_input.strip(), skill_keywords_input.strip(), language_terms, target_location_query.strip()]
     if term
 )
 linkedin_content_search_url = (
     "https://www.linkedin.com/search/results/content/?keywords="
     + quote_plus(post_search_terms)
 )
-st.link_button(
-    "افتح LinkedIn Posts Search بالبحث ده ↗",
-    linkedin_content_search_url,
-    use_container_width=True,
-    help="يتطلب تسجيل دخولك إلى LinkedIn. سيبحث عن بوستات التوظيف باستخدام المسمى والموقع المختارين.",
+linkedin_xray_url = "https://www.google.com/search?q=" + quote_plus(
+    f'site:linkedin.com/posts ({keywords_input.strip()}) ({target_location_query.strip()}) hiring'
 )
+link_col_one, link_col_two = st.columns(2)
+with link_col_one:
+    st.link_button(
+        "افتح LinkedIn Posts Search بالبحث ده ↗",
+        linkedin_content_search_url,
+        use_container_width=True,
+        help="بحث مباشر في محتوى LinkedIn؛ يتطلب تسجيل دخولك.",
+    )
+with link_col_two:
+    st.link_button(
+        "بحث Google عن بوستات LinkedIn ↗",
+        linkedin_xray_url,
+        use_container_width=True,
+        help="تقنية X-Ray إضافية للعثور على بوستات التوظيف العامة.",
+    )
 st.markdown("<div style='height:1.5rem'></div>", unsafe_allow_html=True)
 
 
@@ -1036,6 +1078,7 @@ if "scraped_jobs" not in st.session_state:
 
 search_fingerprint = (
     keywords_input.strip().lower(),
+    skill_keywords_input.strip().lower(),
     selected_job_type,
     selected_seniority,
     selected_workplace,
@@ -1046,6 +1089,12 @@ search_fingerprint = (
     exclude_gcc_national_only,
     include_indeed,
     include_recruiter_posts,
+    include_stepstone,
+    include_bundesagentur,
+    include_xing,
+    include_indeed_germany,
+    include_make_it_germany,
+    search_language,
     fast_search,
     internship_no_experience_only,
 )
@@ -1067,6 +1116,7 @@ search_attempted = False
 if search_clicked:
     st.session_state["last_search_fingerprint"] = search_fingerprint
     keywords = [k.strip() for k in keywords_input.split(",") if k.strip()]
+    skill_keywords = [k.strip() for k in skill_keywords_input.split(",") if k.strip()]
 
     if not keywords:
         st.error("اكتب لوصلة اسم وظيفة واحدة على الأقل عشان تبدأ البحث.")
@@ -1079,6 +1129,11 @@ if search_clicked:
         engine = JobDiscoveryEngine(
             include_indeed=include_indeed,
             include_recruiter_posts=include_recruiter_posts,
+            include_stepstone=include_stepstone,
+            include_bundesagentur=include_bundesagentur,
+            include_xing=include_xing,
+            include_indeed_germany=include_indeed_germany,
+            include_make_it_germany=include_make_it_germany,
         )
         progress_bar = st.progress(0)
         status_box = st.empty()
@@ -1099,6 +1154,7 @@ if search_clicked:
                     seniority=effective_seniority,
                     workplace_type=selected_workplace,
                     date_posted=selected_date_posted,
+                    skill_keywords=skill_keywords,
                     pages_per_keyword=1 if fast_search else 2,
                     exclude_emirati_only=exclude_emirati_only,
                     exclude_saudi_only=exclude_saudi_only,
