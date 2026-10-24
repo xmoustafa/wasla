@@ -6,12 +6,15 @@ from scraper import JobDiscoveryEngine
 
 
 st.set_page_config(
-    page_title="وصلة | Wasla - Job Search",
+    page_title="وصلة | Wasla - Jobs in Germany",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
-light_mode = st.session_state.get("wasla_light_mode", True)
+if "wasla_light_mode" not in st.session_state:
+    st.session_state["wasla_light_mode"] = True
+light_mode = st.session_state["wasla_light_mode"]
+ui_language = st.session_state.get("wasla_ui_language", "العربية")
 
 
 st.markdown(
@@ -758,6 +761,7 @@ html, body, .stApp { background: #f6f8fb !important; color: #14213d !important; 
 [data-testid="stHeader"] { background: rgba(246,248,251,0.9) !important; }
 .search-card, [data-testid="stMetric"], .job-card { background: #ffffff !important; border-color: #d8e0ea !important; }
 .stTextInput > div > div > input, .stSelectbox > div > div { background: #ffffff !important; border-color: #c9d5e3 !important; color: #14213d !important; }
+.stSelectbox [data-baseweb="select"] *, .stSelectbox [role="combobox"] *, .stSelectbox input { color: #14213d !important; -webkit-text-fill-color: #14213d !important; }
 .stTextInput label, .stSelectbox label, [data-testid="stMetricValue"], .wasla-title { color: #14213d !important; }
 .wasla-logo, .wasla-sub, [data-testid="stMetricLabel"], .job-badge { color: #526174 !important; }
 .job-company { color: #34445c !important; }
@@ -882,39 +886,231 @@ DATE_POSTED_OPTIONS = {
 }
 
 
+LANGUAGE_CODES = {"العربية": "ar", "English": "en", "Deutsch": "de"}
+
+I18N = {
+    "ar": {
+        "language": "اللغة",
+        "tagline": "فرصتك القادمة في ألمانيا تبدأ من هنا",
+        "result_language": "لغة إعلانات الوظائف",
+        "result_language_help": "نبحث بالألمانية والإنجليزية معًا لزيادة فرص العثور على وظائف مناسبة في ألمانيا.",
+        "theme": "☀️ فاتح",
+        "job_title": "المسمى الوظيفي",
+        "job_title_placeholder": "مثلاً: Data Analyst, Cyber Security, Pflegefachkraft",
+        "job_title_help": "يمكنك كتابة أكثر من مسمى والفصل بينهم بفاصلة (,). نضيف المرادفات الألمانية تلقائيًا عند توفرها.",
+        "skills": "المهارات والشهادات (اختياري)",
+        "skills_placeholder": "مثلاً: Python, AWS, German B2, Visa Sponsorship",
+        "skills_help": "أضف المهارات أو الشهادات أو مستوى اللغة أو كلمات مثل Visa Sponsorship وRelocation.",
+        "job_type": "نوع التوظيف",
+        "seniority": "مستوى الخبرة",
+        "workplace": "نظام العمل",
+        "eligibility": "⚙️ فلاتر الأهلية والتوطين",
+        "eligibility_caption": "نخفي فقط الإعلانات التي تشترط صراحة جنسية محلية في الخليج.",
+        "exclude_uae": "استبعاد وظائف الإماراتيين فقط",
+        "exclude_saudi": "استبعاد وظائف السعوديين فقط",
+        "exclude_gcc": "استبعاد وظائف مواطني الخليج فقط",
+        "intern_no_exp": "تدريب بدون خبرة سابقة",
+        "include_indeed": "البحث في Indeed",
+        "include_posts": "البحث في منشورات التوظيف على LinkedIn",
+        "germany_sources": "🇩🇪 مصادر التوظيف في ألمانيا",
+        "germany_sources_caption": "مفعّلة افتراضيًا وتظهر نتائجها عند اختيار ألمانيا أو مدينة ألمانية.",
+        "bundesagentur": "Jobsuche الحكومية",
+        "fast_search": "بحث سريع (صفحة واحدة لكل مصدر)",
+        "fast_search_help": "ألغِ الاختيار لبحث أوسع قد يستغرق وقتًا أطول.",
+        "country": "الدولة",
+        "city": "المدينة",
+        "date": "تاريخ النشر",
+        "date_help": "التقديم خلال أول 24 ساعة أو أسبوع يزيد فرصة مشاهدة طلبك.",
+        "custom_location": "اكتب المدينة أو الدولة بالإنجليزية أو الألمانية",
+        "custom_location_help": "مثال: Leipzig, Germany أو Köln, Deutschland",
+        "search": "ابحث عن وظائف في ألمانيا",
+        "linkedin_posts": "افتح بحث منشورات LinkedIn ↗",
+        "google_xray": "بحث Google في منشورات LinkedIn ↗",
+        "linkedin_help": "يفتح بحثًا مباشرًا في LinkedIn وقد يتطلب تسجيل الدخول.",
+        "google_help": "بحث X-Ray إضافي عن منشورات التوظيف العامة.",
+        "missing_title": "اكتب مسمى وظيفيًا واحدًا على الأقل لبدء البحث.",
+        "missing_location": "اختر الدولة أو المدينة التي تريد البحث فيها.",
+        "searching": "نبحث الآن في أفضل مصادر التوظيف الألمانية والدولية...",
+        "search_error": "حدثت مشكلة أثناء البحث: {error}. حاول مرة أخرى.",
+        "total": "إجمالي الفرص",
+        "companies": "الشركات",
+        "contracts": "عقود وعمل حر",
+        "internships": "تدريب",
+        "remote": "عن بُعد",
+        "found": "وجدنا {count} فرصة مناسبة من مصادر متعددة بعد إزالة التكرار.",
+        "outside": "استُبعدت {count} نتيجة خارج الموقع المختار",
+        "uae_excluded": "أُخفي {count} إعلانًا للإماراتيين فقط",
+        "saudi_excluded": "أُخفي {count} إعلانًا للسعوديين فقط",
+        "gcc_excluded": "أُخفي {count} إعلانًا لمواطني الخليج فقط",
+        "download": "تنزيل النتائج CSV",
+        "untitled": "وظيفة بدون عنوان",
+        "unknown": "غير محدد",
+        "apply": "عرض الوظيفة والتقديم ↗",
+        "open_post": "افتح منشور التوظيف ↗",
+        "remote_badge": "عن بُعد (Remote)",
+        "hybrid_badge": "هجين (Hybrid)",
+        "onsite_badge": "من مقر الشركة (On-site)",
+        "no_results": "لم نجد نتائج مطابقة هذه المرة. جرّب مسمى أوسع، أو اختر ألمانيا كلها، أو ألغِ بعض الفلاتر.",
+        "contact": "تواصل مع Moustafa على X",
+        "forked": "مبني بالاعتماد على",
+        "uae_help": "يخفي الإعلانات التي تذكر صراحة UAE National أو Emirati أو Emiratisation.",
+        "saudi_help": "يخفي الإعلانات التي تذكر صراحة Saudi National أو Saudization.",
+        "gcc_help": "يخفي الإعلانات التي تذكر صراحة GCC National أو Gulf National.",
+        "intern_help": "يستبعد التدريبات التي تطلب خبرة سابقة.",
+        "posts_help": "يعرض منشورات التوظيف العامة كفرص تواصل وقد تحتاج لمراسلة الناشر.",
+        "germany_focus": "نبحث في ألمانيا أولًا عبر StepStone وJobsuche وXING وIndeed Deutschland وMake it in Germany، بالإضافة إلى LinkedIn.",
+    },
+    "en": {
+        "language": "Language", "tagline": "Your next opportunity in Germany starts here",
+        "result_language": "Job listing language", "result_language_help": "Search in German and English to improve coverage across Germany.",
+        "theme": "☀️ Light", "job_title": "Job title", "job_title_placeholder": "e.g. Data Analyst, Cyber Security, Pflegefachkraft",
+        "job_title_help": "Enter multiple roles separated by commas. German equivalents are added automatically when available.",
+        "skills": "Skills and certifications (optional)", "skills_placeholder": "e.g. Python, AWS, German B2, Visa Sponsorship",
+        "skills_help": "Add skills, certifications, language level, Visa Sponsorship or Relocation.",
+        "job_type": "Employment type", "seniority": "Experience level", "workplace": "Workplace",
+        "eligibility": "⚙️ Eligibility and localization filters", "eligibility_caption": "Only listings that explicitly require a local Gulf nationality are hidden.",
+        "exclude_uae": "Exclude UAE nationals-only jobs", "exclude_saudi": "Exclude Saudi nationals-only jobs", "exclude_gcc": "Exclude GCC nationals-only jobs",
+        "intern_no_exp": "Internships with no prior experience", "include_indeed": "Search Indeed", "include_posts": "Search LinkedIn recruiter posts",
+        "germany_sources": "🇩🇪 German job sources", "germany_sources_caption": "Enabled by default and used for Germany or a German city.",
+        "bundesagentur": "Federal Jobsuche", "fast_search": "Fast search (one page per source)", "fast_search_help": "Turn off for a broader search that may take longer.",
+        "country": "Country", "city": "City", "date": "Date posted", "date_help": "Applying within the first 24 hours or week improves visibility.",
+        "custom_location": "Enter a city or country in English or German", "custom_location_help": "Example: Leipzig, Germany or Köln, Deutschland",
+        "search": "Find jobs in Germany", "linkedin_posts": "Open LinkedIn Posts search ↗", "google_xray": "Google X-Ray LinkedIn posts ↗",
+        "linkedin_help": "Opens LinkedIn content search and may require sign-in.", "google_help": "An additional X-Ray search for public recruiter posts.",
+        "missing_title": "Enter at least one job title to start searching.", "missing_location": "Choose the country or city you want to search.",
+        "searching": "Searching leading German and international job sources...", "search_error": "Something went wrong while searching: {error}. Please try again.",
+        "total": "Total opportunities", "companies": "Companies", "contracts": "Contracts / freelance", "internships": "Internships", "remote": "Remote",
+        "found": "Found {count} matching opportunities across multiple sources after deduplication.", "outside": "Excluded {count} result(s) outside the selected location",
+        "uae_excluded": "Hidden {count} UAE nationals-only listing(s)", "saudi_excluded": "Hidden {count} Saudi nationals-only listing(s)", "gcc_excluded": "Hidden {count} GCC nationals-only listing(s)",
+        "download": "Download results as CSV", "untitled": "Untitled job", "unknown": "Not specified", "apply": "View job and apply ↗", "open_post": "Open recruiter post ↗",
+        "remote_badge": "Remote", "hybrid_badge": "Hybrid", "onsite_badge": "On-site",
+        "no_results": "No exact matches this time. Try a broader title, select all of Germany, or relax some filters.",
+        "contact": "Contact Moustafa on X", "forked": "Built on", "uae_help": "Hides listings explicitly restricted to UAE nationals.", "saudi_help": "Hides listings explicitly restricted to Saudi nationals.", "gcc_help": "Hides listings explicitly restricted to GCC nationals.", "intern_help": "Excludes internships that require prior experience.", "posts_help": "Shows public recruiter posts as networking opportunities; you may need to message the author.", "germany_focus": "Germany-first search across StepStone, Federal Jobsuche, XING, Indeed Deutschland, Make it in Germany and LinkedIn.",
+    },
+    "de": {
+        "language": "Sprache", "tagline": "Ihre nächste Chance in Deutschland beginnt hier",
+        "result_language": "Sprache der Stellenanzeigen", "result_language_help": "Suche auf Deutsch und Englisch für eine bessere Abdeckung in Deutschland.",
+        "theme": "☀️ Hell", "job_title": "Berufsbezeichnung", "job_title_placeholder": "z. B. Data Analyst, Cyber Security, Pflegefachkraft",
+        "job_title_help": "Mehrere Berufe durch Kommas trennen. Deutsche Entsprechungen werden automatisch ergänzt.",
+        "skills": "Kenntnisse und Zertifikate (optional)", "skills_placeholder": "z. B. Python, AWS, Deutsch B2, Visa Sponsorship",
+        "skills_help": "Kenntnisse, Zertifikate, Sprachniveau, Visa Sponsorship oder Relocation hinzufügen.",
+        "job_type": "Beschäftigungsart", "seniority": "Erfahrungsstufe", "workplace": "Arbeitsmodell",
+        "eligibility": "⚙️ Filter für Berechtigung und Lokalisierung", "eligibility_caption": "Nur Anzeigen mit ausdrücklich geforderter lokaler Golf-Staatsangehörigkeit werden ausgeblendet.",
+        "exclude_uae": "Nur für VAE-Staatsangehörige ausschließen", "exclude_saudi": "Nur für saudische Staatsangehörige ausschließen", "exclude_gcc": "Nur für GCC-Staatsangehörige ausschließen",
+        "intern_no_exp": "Praktika ohne Berufserfahrung", "include_indeed": "Indeed durchsuchen", "include_posts": "LinkedIn-Recruiter-Beiträge durchsuchen",
+        "germany_sources": "🇩🇪 Deutsche Jobquellen", "germany_sources_caption": "Standardmäßig aktiviert für Deutschland und deutsche Städte.",
+        "bundesagentur": "Jobsuche der Bundesagentur", "fast_search": "Schnellsuche (eine Seite je Quelle)", "fast_search_help": "Deaktivieren für eine breitere, möglicherweise längere Suche.",
+        "country": "Land", "city": "Stadt", "date": "Veröffentlicht", "date_help": "Bewerbungen in den ersten 24 Stunden oder der ersten Woche sind oft sichtbarer.",
+        "custom_location": "Stadt oder Land auf Deutsch oder Englisch eingeben", "custom_location_help": "Beispiel: Leipzig, Germany oder Köln, Deutschland",
+        "search": "Jobs in Deutschland finden", "linkedin_posts": "LinkedIn-Beiträge durchsuchen ↗", "google_xray": "Google X-Ray für LinkedIn-Beiträge ↗",
+        "linkedin_help": "Öffnet die LinkedIn-Inhaltssuche; eventuell ist eine Anmeldung erforderlich.", "google_help": "Zusätzliche X-Ray-Suche nach öffentlichen Recruiting-Beiträgen.",
+        "missing_title": "Bitte mindestens eine Berufsbezeichnung eingeben.", "missing_location": "Bitte Land oder Stadt auswählen.",
+        "searching": "Führende deutsche und internationale Jobquellen werden durchsucht...", "search_error": "Bei der Suche ist ein Fehler aufgetreten: {error}. Bitte erneut versuchen.",
+        "total": "Stellen insgesamt", "companies": "Unternehmen", "contracts": "Vertrag / Freelance", "internships": "Praktika", "remote": "Remote",
+        "found": "{count} passende Stellen aus mehreren Quellen ohne Duplikate gefunden.", "outside": "{count} Ergebnis(se) außerhalb des gewählten Orts ausgeschlossen",
+        "uae_excluded": "{count} Anzeige(n) nur für VAE-Staatsangehörige ausgeblendet", "saudi_excluded": "{count} Anzeige(n) nur für saudische Staatsangehörige ausgeblendet", "gcc_excluded": "{count} Anzeige(n) nur für GCC-Staatsangehörige ausgeblendet",
+        "download": "Ergebnisse als CSV herunterladen", "untitled": "Stelle ohne Titel", "unknown": "Nicht angegeben", "apply": "Stelle ansehen und bewerben ↗", "open_post": "Recruiting-Beitrag öffnen ↗",
+        "remote_badge": "Remote", "hybrid_badge": "Hybrid", "onsite_badge": "Vor Ort",
+        "no_results": "Diesmal keine exakten Treffer. Versuchen Sie einen breiteren Titel, ganz Deutschland oder weniger Filter.",
+        "contact": "Moustafa auf X kontaktieren", "forked": "Basiert auf", "uae_help": "Blendet Stellen aus, die ausdrücklich nur für VAE-Staatsangehörige bestimmt sind.", "saudi_help": "Blendet Stellen aus, die ausdrücklich nur für saudische Staatsangehörige bestimmt sind.", "gcc_help": "Blendet Stellen aus, die ausdrücklich nur für GCC-Staatsangehörige bestimmt sind.", "intern_help": "Schließt Praktika aus, die Berufserfahrung voraussetzen.", "posts_help": "Zeigt öffentliche Recruiting-Beiträge als Kontaktmöglichkeit; eventuell müssen Sie den Autor anschreiben.", "germany_focus": "Deutschlandweite Suche über StepStone, Jobsuche der Bundesagentur, XING, Indeed Deutschland, Make it in Germany und LinkedIn.",
+    },
+}
+
+OPTION_TRANSLATIONS = {
+    "all": {"ar": "الكل", "en": "All", "de": "Alle"},
+    "full_time": {"ar": "دوام كامل", "en": "Full-time", "de": "Vollzeit"},
+    "part_time": {"ar": "دوام جزئي", "en": "Part-time", "de": "Teilzeit"},
+    "contract": {"ar": "عقد / عمل حر", "en": "Contract / Freelance", "de": "Vertrag / Freelance"},
+    "internship": {"ar": "تدريب", "en": "Internship", "de": "Praktikum"},
+    "entry": {"ar": "مبتدئ / حديث تخرج", "en": "Junior / Entry", "de": "Junior / Berufseinstieg"},
+    "mid": {"ar": "متوسط الخبرة", "en": "Mid-level", "de": "Mittlere Erfahrung"},
+    "senior": {"ar": "خبير / سينيور", "en": "Senior / Lead", "de": "Senior / Lead"},
+    "director": {"ar": "إدارة وقيادة", "en": "Manager / Director", "de": "Manager / Leitung"},
+    "remote": {"ar": "عن بُعد", "en": "Remote", "de": "Remote"},
+    "hybrid": {"ar": "هجين", "en": "Hybrid", "de": "Hybrid"},
+    "onsite": {"ar": "من مقر الشركة", "en": "On-site", "de": "Vor Ort"},
+    "past_week": {"ar": "آخر أسبوع", "en": "Past week", "de": "Letzte Woche"},
+    "past_24h": {"ar": "آخر 24 ساعة", "en": "Past 24 hours", "de": "Letzte 24 Stunden"},
+}
+
+COUNTRY_LABELS = {
+    "مصر": {"ar": "مصر", "en": "Egypt", "de": "Ägypten"}, "السعودية": {"ar": "السعودية", "en": "Saudi Arabia", "de": "Saudi-Arabien"},
+    "الإمارات": {"ar": "الإمارات", "en": "United Arab Emirates", "de": "Vereinigte Arabische Emirate"}, "قطر": {"ar": "قطر", "en": "Qatar", "de": "Katar"},
+    "ألمانيا": {"ar": "🇩🇪 ألمانيا", "en": "🇩🇪 Germany", "de": "🇩🇪 Deutschland"}, "هولندا": {"ar": "هولندا", "en": "Netherlands", "de": "Niederlande"},
+    "بلد تانية (كتابة يدوية)": {"ar": "دولة أخرى", "en": "Other country", "de": "Anderes Land"},
+}
+
+
+def tr(key: str, **kwargs) -> str:
+    value = I18N[LANGUAGE_CODES.get(ui_language, "ar")][key]
+    return value.format(**kwargs) if kwargs else value
+
+
+def option_label(value: str) -> str:
+    return OPTION_TRANSLATIONS.get(value, {}).get(LANGUAGE_CODES.get(ui_language, "ar"), value)
+
+
+def localize_job_value(value: str) -> str:
+    if ui_language == "العربية":
+        return value
+    replacements = {
+        "غير محدد": "Not specified" if ui_language == "English" else "Nicht angegeben",
+        "دوام كامل": "Full-time" if ui_language == "English" else "Vollzeit",
+        "دوام جزئي": "Part-time" if ui_language == "English" else "Teilzeit",
+        "تدريب": "Internship" if ui_language == "English" else "Praktikum",
+        "مبتدئ": "Junior" if ui_language == "English" else "Berufseinstieg",
+        "متوسط": "Mid-level" if ui_language == "English" else "Mittlere Erfahrung",
+        "خبير": "Senior" if ui_language == "English" else "Senior",
+        "عن بُعد": "Remote", "هجين": "Hybrid", "من المقر": "On-site" if ui_language == "English" else "Vor Ort",
+    }
+    localized = value
+    for source, target in replacements.items():
+        localized = localized.replace(source, target)
+    return localized
+
+
+language_col, theme_col = st.columns([4, 1])
+with language_col:
+    ui_language = st.selectbox(
+        "Language / اللغة / Sprache",
+        options=["العربية", "English", "Deutsch"],
+        key="wasla_ui_language",
+    )
+with theme_col:
+    st.toggle(tr("theme"), key="wasla_light_mode")
+
+ui_direction = "rtl" if ui_language == "العربية" else "ltr"
+text_align = "right" if ui_direction == "rtl" else "left"
+
 st.markdown(
-    """
+    f"""
     <div class="wasla-header">
         <div class="wasla-logo">
             <span class="wasla-logo-dot"></span>
             وصلة | Wasla
             <span class="wasla-logo-dot"></span>
         </div>
-        <div class="wasla-title">Wasla <span>Find your next opportunity</span></div>
+        <div class="wasla-title">Wasla <span>{tr('tagline')}</span></div>
+        <div class="wasla-sub">{tr('germany_focus')}</div>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-search_left, theme_right = st.columns([5, 1])
-ui_language = "العربية"
-with search_left:
-    search_language = st.selectbox(
-        "لغة النتائج / Search language",
-        options=["English + Deutsch", "Deutsch / German"],
-        index=0,
-        help="يضيف وصلة المرادفات الألمانية تلقائيًا إلى البحث، خصوصًا لو اخترت مدينة في ألمانيا.",
-    )
-with theme_right:
-    st.toggle("☀️ فاتح", key="wasla_light_mode", help="تبديل بين الوضع الفاتح والداكن")
+search_language = st.selectbox(
+    tr("result_language"),
+    options=["English + Deutsch", "Deutsch / German"],
+    index=0,
+    help=tr("result_language_help"),
+)
 
-ui_direction = "rtl"
 st.markdown(
     f"""
     <style>
       html, body, .stApp {{ direction: {ui_direction} !important; }}
-      [data-testid="stHorizontalBlock"] {{ direction: rtl !important; width: 100% !important; overflow: visible !important; }}
-      [data-testid="stColumn"] {{ direction: rtl !important; min-width: 0 !important; }}
+      body, p, label, .stMarkdown, .stText, h1, h2, h3, h4, h5, h6 {{ text-align: {text_align} !important; }}
+      [data-testid="stHorizontalBlock"] {{ direction: {ui_direction} !important; width: 100% !important; overflow: visible !important; }}
+      [data-testid="stColumn"] {{ direction: {ui_direction} !important; min-width: 0 !important; }}
       [data-testid="stExpander"] {{ direction: {ui_direction} !important; overflow: visible !important; }}
       [data-testid="stExpander"] summary {{ direction: {ui_direction} !important; text-align: {'right' if ui_direction == 'rtl' else 'left'} !important; white-space: normal !important; }}
       [data-testid="stCheckbox"], [data-testid="stRadio"] {{ direction: {ui_direction} !important; }}
@@ -924,6 +1120,8 @@ st.markdown(
       .stTextInput input {{ direction: {ui_direction} !important; text-align: {'right' if ui_direction == 'rtl' else 'left'} !important; }}
       .stRadio > label, .stSelectbox > label, .stTextInput > label {{ direction: {ui_direction} !important; }}
       [data-baseweb="popover"] *, ul[role="listbox"] *, li[role="option"] {{ direction: {ui_direction} !important; text-align: {'right' if ui_direction == 'rtl' else 'left'} !important; }}
+      .jobs-container, .job-card, .job-card-main, .job-badges {{ direction: {ui_direction} !important; text-align: {text_align} !important; }}
+      .job-card {{ flex-direction: {'row' if ui_direction == 'rtl' else 'row'}; }}
       @media (max-width: 760px) {{
         .stRadio > div {{ flex-wrap: wrap !important; gap: .25rem !important; }}
         .stRadio label {{ white-space: nowrap !important; }}
@@ -935,16 +1133,16 @@ st.markdown(
 
 
 keywords_input = st.text_input(
-    "عايز تشتغل إيه بالظبط؟ (Job Title)",
+    tr("job_title"),
     value="Data Analyst",
-    placeholder="مثلاً: Python, Data Analyst, Flutter...",
-    help="ممكن تكتب أكتر من مسمى وتفصل بينهم بفاصلة (,) ووصلة هتدور عليهم كلهم.",
+    placeholder=tr("job_title_placeholder"),
+    help=tr("job_title_help"),
 )
 
 skill_keywords_input = st.text_input(
-    "Keywords للمهارات والشهادات (اختياري)",
-    placeholder="مثلاً: Python, AWS, CCNA, German B2, Visa Sponsorship",
-    help="اكتب مهارات، أدوات، شهادات أو متطلبات تريد تقوية البحث بها. تُستخدم في البحث وترفع ترتيب النتائج المطابقة.",
+    tr("skills"),
+    placeholder=tr("skills_placeholder"),
+    help=tr("skills_help"),
 )
 
 st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
@@ -952,77 +1150,77 @@ st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
 col_jt, col_sen, col_wp = st.columns(3)
 with col_jt:
     job_type_label = st.selectbox(
-        "نوع الشغلانة (التعاقد)",
+        tr("job_type"),
         options=list(JOB_TYPES.keys()),
         index=0,
-        help="دوام كامل، دوام جزئي، أو عقود عمل وفريلانس.",
+        format_func=lambda label: option_label(JOB_TYPES[label]),
     )
     selected_job_type = JOB_TYPES[job_type_label]
 
 with col_sen:
     seniority_label = st.selectbox(
-        " مستوى الخبرة (Seniority)",
+        tr("seniority"),
         options=list(SENIORITY_LEVELS.keys()),
         index=0,
-        help="مبتدئ، متوسط، سينيور، أو تدريب.. وصلة هتفلترلك المسمى.",
+        format_func=lambda label: option_label(SENIORITY_LEVELS[label]),
     )
     selected_seniority = SENIORITY_LEVELS[seniority_label]
 
 with col_wp:
     workplace_label = st.selectbox(
-        "طريقة الشغل (بيئة العمل)",
+        tr("workplace"),
         options=list(WORKPLACE_TYPES.keys()),
         index=0,
-        help="عايز تشتغل من البيت وتحت التكييف ولا مستعد تنزل مقر الشركة؟",
+        format_func=lambda label: option_label(WORKPLACE_TYPES[label]),
     )
     selected_workplace = WORKPLACE_TYPES[workplace_label]
 
 st.markdown("<div style='height:0.55rem'></div>", unsafe_allow_html=True)
-with st.expander("⚙️ فلتر الأهلية ومتطلبات التوطين (مفعّل افتراضيًا)", expanded=False):
-    st.caption("افتح الخانة لتغيير الفلاتر. وصلة تخفي فقط شرط الجنسية/التوطين المكتوب صراحة في الإعلان.")
+with st.expander(tr("eligibility"), expanded=False):
+    st.caption(tr("eligibility_caption"))
     eligibility_col_uae, eligibility_col_saudi, eligibility_col_gcc = st.columns(3)
     with eligibility_col_uae:
         exclude_emirati_only = st.checkbox(
-            "تجاهل توطين الإماراتيين",
+            tr("exclude_uae"),
             value=True,
-            help="يخفي الإعلانات التي تذكر بوضوح UAE National / Emirati / Emiratisation.",
+            help=tr("uae_help"),
         )
     with eligibility_col_saudi:
         exclude_saudi_only = st.checkbox(
-            "تجاهل إعلانات السعوديين فقط",
+            tr("exclude_saudi"),
             value=True,
-            help="يخفي الإعلانات التي تذكر بوضوح Saudi National / Saudization / Saudi only.",
+            help=tr("saudi_help"),
         )
     with eligibility_col_gcc:
         exclude_gcc_national_only = st.checkbox(
-            "تجاهل إعلانات مواطني GCC فقط",
+            tr("exclude_gcc"),
             value=True,
-            help="يخفي الإعلانات التي تذكر بوضوح GCC National / Gulf National / مواطني مجلس التعاون.",
+            help=tr("gcc_help"),
         )
 
 filters_top_left, filters_top_right = st.columns(2)
 with filters_top_left:
     internship_no_experience_only = st.checkbox(
-        "Internship: بدون خبرة مطلوبة",
+        tr("intern_no_exp"),
         value=False,
-        help="يستبعد التدريبات التي تطلب خبرة سابقة، حتى لو كان عنوانها Internship.",
+        help=tr("intern_help"),
     )
 filters_bottom_left, filters_bottom_right = st.columns(2)
 with filters_bottom_left:
-    include_indeed = st.checkbox("ابحث في Indeed", value=True)
+    include_indeed = st.checkbox(tr("include_indeed"), value=True)
 with filters_bottom_right:
     include_recruiter_posts = st.checkbox(
-        "البحث في بوستات التوظيف على LinkedIn",
+        tr("include_posts"),
         value=True,
-        help="يعرض بوستات توظيف عامة كفرص تواصل؛ قد تحتاج لمراسلة الناشر بدلاً من زر تقديم مباشر.",
+        help=tr("posts_help"),
     )
-with st.expander("مصادر ألمانيا الإضافية", expanded=False):
-    st.caption("تظهر هذه المصادر نتائج فقط عندما تختار ألمانيا أو مدينة ألمانية.")
+with st.expander(tr("germany_sources"), expanded=True):
+    st.caption(tr("germany_sources_caption"))
     germany_source_one, germany_source_two, germany_source_three = st.columns(3)
     with germany_source_one:
         include_stepstone = st.checkbox("StepStone", value=True)
     with germany_source_two:
-        include_bundesagentur = st.checkbox("Jobsuche الحكومية", value=True)
+        include_bundesagentur = st.checkbox(tr("bundesagentur"), value=True)
     with germany_source_three:
         include_xing = st.checkbox("XING Jobs", value=True)
     germany_source_four, germany_source_five = st.columns(2)
@@ -1031,36 +1229,48 @@ with st.expander("مصادر ألمانيا الإضافية", expanded=False):
     with germany_source_five:
         include_make_it_germany = st.checkbox("Make it in Germany", value=True)
 fast_search = st.checkbox(
-    "بحث سريع (صفحة واحدة لكل مصدر)",
+    tr("fast_search"),
     value=True,
-    help="ألغِه لبحث أوسع يستغرق وقتاً أطول.",
+    help=tr("fast_search_help"),
 )
 
 
 
 col_country, col_city, col_date = st.columns([1, 1.6, 1.2])
 with col_country:
-    selected_country = st.selectbox("الدولة", options=list(COUNTRIES.keys()), index=0)
+    country_options = ["ألمانيا"] + [country for country in COUNTRIES if country != "ألمانيا"]
+    selected_country = st.selectbox(
+        tr("country"),
+        options=country_options,
+        index=0,
+        format_func=lambda country: COUNTRY_LABELS.get(country, {}).get(LANGUAGE_CODES.get(ui_language, "ar"), country),
+    )
 with col_city:
     available_cities = COUNTRIES[selected_country]
     selected_city_label = st.selectbox(
-        "عايزها في محافظة إيه؟", options=list(available_cities.keys()), index=0
+        tr("city"), options=list(available_cities.keys()), index=0,
+        format_func=lambda city: city if ui_language == "العربية" else (
+            city.split("(")[1].rstrip(")") if "(" in city else
+            available_cities[city].replace(", Germany", "") if available_cities[city] != "__custom__" else
+            ("Other city" if ui_language == "English" else "Andere Stadt")
+        ),
     )
 with col_date:
     date_posted_label = st.selectbox(
-        "الوظيفة نازله من إمتى؟",
+        tr("date"),
         options=list(DATE_POSTED_OPTIONS.keys()),
         index=0,
-        help="التقديم في أول 24 ساعة أو أول أسبوع بيزود فرصتك جداً إن الـ HR يشوف الـ CV بتاعك.",
+        format_func=lambda label: option_label(DATE_POSTED_OPTIONS[label]),
+        help=tr("date_help"),
     )
     selected_date_posted = DATE_POSTED_OPTIONS[date_posted_label]
 
 target_location_query = available_cities[selected_city_label]
 if target_location_query == "__custom__":
     custom_loc = st.text_input(
-        "اكتب اسم المدينة أو الدولة بالإنجليزية (زي ما مكتوبة في LinkedIn)",
-        value="Mansoura, Egypt",
-        help="مثال: Mansoura, Egypt أو Riyadh, Saudi Arabia",
+        tr("custom_location"),
+        value="Leipzig, Germany",
+        help=tr("custom_location_help"),
     )
     target_location_query = custom_loc.strip()
 
@@ -1068,8 +1278,7 @@ st.markdown("</div>", unsafe_allow_html=True)
 
 
 st.markdown("<div style='height:0.2rem'></div>", unsafe_allow_html=True)
-search_cta = {"العربية": "شوفلي الشغل", "English": "Find jobs", "Deutsch": "Jobs finden"}.get(ui_language, "شوفلي الشغل")
-search_clicked = st.button(search_cta, type="primary", use_container_width=True)
+search_clicked = st.button(tr("search"), type="primary", use_container_width=True)
 language_terms = "hiring vacancy open position einstellen gesucht Bewerbung" if search_language == "English + Deutsch" else "einstellen gesucht Bewerbung Stellenausschreibung"
 post_search_terms = " ".join(
     term for term in [keywords_input.strip(), skill_keywords_input.strip(), language_terms, target_location_query.strip()]
@@ -1085,17 +1294,17 @@ linkedin_xray_url = "https://www.google.com/search?q=" + quote_plus(
 link_col_one, link_col_two = st.columns(2)
 with link_col_one:
     st.link_button(
-        {"العربية": "افتح LinkedIn Posts Search بالبحث ده ↗", "English": "Open LinkedIn Posts Search ↗", "Deutsch": "LinkedIn-Posts öffnen ↗"}.get(ui_language, "افتح LinkedIn Posts Search بالبحث ده ↗"),
+        tr("linkedin_posts"),
         linkedin_content_search_url,
         use_container_width=True,
-        help="بحث مباشر في محتوى LinkedIn؛ يتطلب تسجيل دخولك.",
+        help=tr("linkedin_help"),
     )
 with link_col_two:
     st.link_button(
-        {"العربية": "بحث Google عن بوستات LinkedIn ↗", "English": "Google X-Ray for LinkedIn posts ↗", "Deutsch": "Google X-Ray für LinkedIn-Posts ↗"}.get(ui_language, "بحث Google عن بوستات LinkedIn ↗"),
+        tr("google_xray"),
         linkedin_xray_url,
         use_container_width=True,
-        help="تقنية X-Ray إضافية للعثور على بوستات التوظيف العامة.",
+        help=tr("google_help"),
     )
 st.markdown("<div style='height:1.5rem'></div>", unsafe_allow_html=True)
 
@@ -1146,9 +1355,9 @@ if search_clicked:
     skill_keywords = [k.strip() for k in skill_keywords_input.split(",") if k.strip()]
 
     if not keywords:
-        st.error("اكتب لوصلة اسم وظيفة واحدة على الأقل عشان تبدأ البحث.")
+        st.error(tr("missing_title"))
     elif not target_location_query:
-        st.error("حدد الدولة أو المدينة التي تريد البحث فيها.")
+        st.error(tr("missing_location"))
     else:
         search_attempted = True
         effective_location = target_location_query.strip()
@@ -1168,12 +1377,12 @@ if search_clicked:
         def update_progress(ratio: float, msg: str):
             try:
                 progress_bar.progress(min(max(float(ratio), 0.0), 1.0))
-                status_box.info(msg)
+                status_box.info(tr("searching"))
             except Exception:
                 pass
 
         try:
-            with st.spinner("...ثواني وجايلك بالفرص"):
+            with st.spinner(tr("searching")):
                 jobs = engine.discover(
                     keywords=keywords,
                     location=effective_location,
@@ -1193,7 +1402,7 @@ if search_clicked:
         except Exception as e:
             search_attempted = False
             st.session_state["scraped_jobs"] = []
-            st.error(f"حصلت مشكلة وأنا بدور: {e}. استرها عليا وجرب تاني")
+            st.error(tr("search_error", error=e))
             try:
                 with open("crash.log", "a", encoding="utf-8") as f:
                     import traceback
@@ -1218,23 +1427,23 @@ if results:
     remote_count = len(df[df["بيئة العمل"].str.contains("عن بُعد", na=False)])
 
     if selected_job_type == "contract":
-        col3_metric_label = "عقود وعمل حر (Contract)"
+        col3_metric_label = tr("contracts")
         col3_metric_val = len(df[df["نوع الوظيفة"].str.contains("عقد|Contract|حر|Freelance", na=False)])
     else:
-        col3_metric_label = "تدريبات (Internships)"
+        col3_metric_label = tr("internships")
         col3_metric_val = len(df[df["نوع الوظيفة"].str.contains("تدريب|Intern", na=False)])
 
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("إجمالي الفرص الفريدة", total_jobs)
-    col2.metric("شركات بتطلب", unique_companies)
+    col1.metric(tr("total"), total_jobs)
+    col2.metric(tr("companies"), unique_companies)
     col3.metric(col3_metric_label, col3_metric_val)
-    col4.metric("شغل من البيت (Remote)", remote_count)
+    col4.metric(tr("remote"), remote_count)
 
     st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
 
     top_bar_col1, top_bar_col2 = st.columns([3, 1])
     with top_bar_col1:
-        st.success(f"لقينا {total_jobs} فرصة شغل/تدريب تناسب طلبك من مصادر متعددة بدون تكرار.")
+        st.success(tr("found", count=total_jobs))
         metrics = st.session_state.get("discovery_metrics", {})
         location_excluded = metrics.get("location_excluded", 0)
         emirati_excluded = metrics.get("emirati_excluded", 0)
@@ -1243,18 +1452,23 @@ if results:
         if location_excluded or emirati_excluded or saudi_excluded or gcc_national_excluded:
             notes = []
             if location_excluded:
-                notes.append(f"تم استبعاد {location_excluded} نتيجة خارج الموقع المختار")
+                notes.append(tr("outside", count=location_excluded))
             if emirati_excluded:
-                notes.append(f"تم إخفاء {emirati_excluded} إعلانًا بتوطين إماراتي صريح")
+                notes.append(tr("uae_excluded", count=emirati_excluded))
             if saudi_excluded:
-                notes.append(f"تم إخفاء {saudi_excluded} إعلانًا للسعوديين فقط")
+                notes.append(tr("saudi_excluded", count=saudi_excluded))
             if gcc_national_excluded:
-                notes.append(f"تم إخفاء {gcc_national_excluded} إعلانًا لمواطني GCC فقط")
+                notes.append(tr("gcc_excluded", count=gcc_national_excluded))
             st.caption(" | ".join(notes))
     with top_bar_col2:
-        csv_bytes = df.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
+        export_columns = {
+            "en": {"المسمى الوظيفي": "Job title", "الشركة": "Company", "المكان": "Location", "نوع الوظيفة": "Employment type", "مستوى الخبرة": "Experience level", "بيئة العمل": "Workplace", "تاريخ النشر": "Date posted", "رابط التقديم": "Application URL", "المصدر": "Source"},
+            "de": {"المسمى الوظيفي": "Berufsbezeichnung", "الشركة": "Unternehmen", "المكان": "Ort", "نوع الوظيفة": "Beschäftigungsart", "مستوى الخبرة": "Erfahrungsstufe", "بيئة العمل": "Arbeitsmodell", "تاريخ النشر": "Veröffentlicht", "رابط التقديم": "Bewerbungslink", "المصدر": "Quelle"},
+        }
+        export_df = df.rename(columns=export_columns.get(LANGUAGE_CODES.get(ui_language, "ar"), {}))
+        csv_bytes = export_df.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
         st.download_button(
-            label="نزّل اللستة دي شيت Excel",
+            label=tr("download"),
             data=csv_bytes,
             file_name="wasla_job_results.csv",
             mime="text/csv",
@@ -1263,11 +1477,13 @@ if results:
 
     cards_html = []
     for job in results:
-        title = html.escape(str(job.get("المسمى الوظيفي", "وظيفة بدون عنوان")))
-        company = html.escape(str(job.get("الشركة", "غير محدد")))
-        loc = html.escape(str(job.get("المكان", "مصر")))
-        job_type = html.escape(str(job.get("نوع الوظيفة", "غير محدد")))
-        post_date = html.escape(str(job.get("تاريخ النشر", "غير محدد")))
+        title = html.escape(str(job.get("المسمى الوظيفي", tr("untitled"))))
+        company = html.escape(str(job.get("الشركة", tr("unknown"))))
+        loc = html.escape(str(job.get("المكان", "Germany")))
+        raw_job_type = str(job.get("نوع الوظيفة", "غير محدد"))
+        raw_post_date = str(job.get("تاريخ النشر", "غير محدد"))
+        job_type = html.escape(localize_job_value(raw_job_type))
+        post_date = html.escape(localize_job_value(raw_post_date))
         raw_link = str(job.get("رابط التقديم", ""))
         parsed_link = urlparse(raw_link)
         link = raw_link if parsed_link.scheme in {"http", "https"} and parsed_link.netloc else ""
@@ -1280,31 +1496,32 @@ if results:
         if len(sources) > 1:
             sources_label = " · ".join(sources)
             source_html = f'<span class="job-badge job-badge-source-multi">✨ {sources_label}</span>'
-            btn_text = "قدّم على الرابط المباشر ↗"
+            btn_text = tr("apply")
         elif "LinkedIn Recruiter Posts" in sources:
             source_html = '<span class="job-badge job-badge-source-post">LinkedIn Recruiter Post</span>'
-            btn_text = "افتح بوست التوظيف ↗"
+            btn_text = tr("open_post")
         elif "Indeed" in sources:
             source_html = '<span class="job-badge job-badge-source-indeed">Indeed</span>'
-            btn_text = "قدّم على Indeed ↗"
+            btn_text = tr("apply")
         elif "Tanqeeb" in sources:
             source_html = '<span class="job-badge job-badge-source-tanqeeb">Tanqeeb (تنقيب)</span>'
-            btn_text = "قدّم على Tanqeeb ↗"
+            btn_text = tr("apply")
         else:
             source_html = '<span class="job-badge job-badge-source-linkedin">LinkedIn</span>'
-            btn_text = "قدّم على LinkedIn ↗"
+            btn_text = tr("apply")
 
-        seniority = html.escape(str(job.get("مستوى الخبرة", "غير محدد")))
+        raw_seniority = str(job.get("مستوى الخبرة", "غير محدد"))
+        seniority = html.escape(localize_job_value(raw_seniority))
 
-        is_intern_type = "تدريب" in job_type or "intern" in job_type.lower()
-        is_intern_seniority = "تدريب" in seniority or "intern" in seniority.lower()
-        is_grad_type = "خريجين" in job_type or "graduate" in job_type.lower()
-        is_grad_seniority = "خريجين" in seniority or "graduate" in seniority.lower()
+        is_intern_type = "تدريب" in raw_job_type or "intern" in raw_job_type.lower()
+        is_intern_seniority = "تدريب" in raw_seniority or "intern" in raw_seniority.lower()
+        is_grad_type = "خريجين" in raw_job_type or "graduate" in raw_job_type.lower()
+        is_grad_seniority = "خريجين" in raw_seniority or "graduate" in raw_seniority.lower()
 
 
-        if (is_intern_type and is_intern_seniority) or (is_grad_type and is_grad_seniority) or (job_type != "غير محدد" and job_type == seniority):
+        if (is_intern_type and is_intern_seniority) or (is_grad_type and is_grad_seniority) or (raw_job_type != "غير محدد" and raw_job_type == raw_seniority):
             seniority_html = ""
-        elif seniority != "غير محدد":
+        elif raw_seniority != "غير محدد":
             seniority_badge_class = "job-badge-intern" if is_intern_seniority else "job-badge-seniority"
             seniority_html = f'<span class="job-badge {seniority_badge_class}">{seniority}</span>'
         else:
@@ -1312,24 +1529,24 @@ if results:
 
         if is_intern_type:
             type_badge_class = "job-badge-intern"
-        elif "عقد" in job_type or "Contract" in job_type or "حر" in job_type or "Freelance" in job_type:
+        elif "عقد" in raw_job_type or "Contract" in raw_job_type or "حر" in raw_job_type or "Freelance" in raw_job_type:
             type_badge_class = "job-badge-contract"
         else:
             type_badge_class = "job-badge-default"
 
-        type_html = f'<span class="job-badge {type_badge_class}">{job_type}</span>' if job_type != "غير محدد" else ""
+        type_html = f'<span class="job-badge {type_badge_class}">{job_type}</span>' if raw_job_type != "غير محدد" else ""
 
         raw_workplace = str(job.get("بيئة العمل", ""))
         if "عن بُعد" in raw_workplace or "Remote" in raw_workplace:
-            workplace_html = '<span class="job-badge job-badge-remote">عن بُعد (Remote)</span>'
+            workplace_html = f'<span class="job-badge job-badge-remote">{tr("remote_badge")}</span>'
         elif "هجين" in raw_workplace or "Hybrid" in raw_workplace:
-            workplace_html = '<span class="job-badge job-badge-hybrid">هجين (Hybrid)</span>'
+            workplace_html = f'<span class="job-badge job-badge-hybrid">{tr("hybrid_badge")}</span>'
         elif ("من المقر" in raw_workplace or "On-site" in raw_workplace) and ("غير محدد" not in raw_workplace):
-            workplace_html = '<span class="job-badge job-badge-default">من المقر (On-site)</span>'
+            workplace_html = f'<span class="job-badge job-badge-default">{tr("onsite_badge")}</span>'
         else:
             workplace_html = ""
 
-        date_html = f'<span class="job-badge job-badge-date">{post_date}</span>' if post_date != "غير محدد" else ""
+        date_html = f'<span class="job-badge job-badge-date">{post_date}</span>' if raw_post_date != "غير محدد" else ""
         eligibility_note = html.escape(str(job.get("eligibility_note", "")))
         eligibility_html = (
             f'<span class="job-badge job-badge-eligibility">⚠ {eligibility_note}</span>'
@@ -1366,24 +1583,20 @@ if results:
     st.markdown(full_cards_html, unsafe_allow_html=True)
 
 elif search_attempted:
-    st.warning(
-        "وصلة لم تجد نتائج مطابقة تمامًا هذه المرة. "
-        "جرب تغير المسمى شوية (مثلاً بدل مسمى ضيق، جرب مسمى أوسع زي Software بدل Specialized Junior Tool)، "
-        "أو وسّع نطاق المدينة وجرب البحث مرة أخرى."
-    )
+    st.warning(tr("no_results"))
 else:
     st.markdown("""
 
     """,unsafe_allow_html=True)
 
 st.markdown(
-    """
+    f"""
     <div class="wasla-footer">
         <span>وصلة | Wasla</span>
         <span>•</span>
-        <a href="https://x.com/Prosox0x0" target="_blank" rel="noopener noreferrer">تواصل مع Moustafa على X</a>
+        <a href="https://x.com/Prosox0x0" target="_blank" rel="noopener noreferrer">{tr('contact')}</a>
         <span>•</span>
-        <span>Forked from <a href="https://github.com/qenawy1/EMAD" target="_blank" rel="noopener noreferrer">qenawy1/EMAD</a></span>
+        <span>{tr('forked')} <a href="https://github.com/qenawy1/EMAD" target="_blank" rel="noopener noreferrer">qenawy1/EMAD</a></span>
     </div>
     """,
     unsafe_allow_html=True,
